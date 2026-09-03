@@ -9,10 +9,10 @@ import {
 } from "./automations-store";
 import { getGlobalSingleton } from "./instances";
 import { piRuntimeManager } from "./pi-runtime";
+import { harnessSessions } from "./harness-sessions";
 import { lastAssistantResult } from "./session-text";
 import { listProjectsFromStore } from "./projects-store";
 import { refreshPiModels } from "./pi-runtime-models";
-import { findSessionFile } from "./sessions-store";
 
 const TICK_MS = 30_000;
 
@@ -86,7 +86,7 @@ function findTargetSessionCwd(automation: Automation, targetSessionId: string): 
   const candidates = [automation.cwd, ...listProjectsFromStore().map((project) => project.path)];
   for (const candidate of new Set(candidates.map((cwd) => cwd.trim()).filter(Boolean))) {
     try {
-      if (findSessionFile(candidate, targetSessionId)) return candidate;
+      if (harnessSessions().hasSession(candidate, targetSessionId)) return candidate;
     } catch {
       continue;
     }
@@ -175,7 +175,7 @@ export async function runAutomationNow(
         const status = session.status;
         const piSessionId = status.piSessionId;
         const result = piSessionId
-          ? lastAssistantResult(status.cwd, piSessionId)
+          ? lastAssistantResult(piSessionId)
           : { text: "", error: null };
         const error = automationRunError(status.lastError ?? result.error, result.text);
         const projectId =

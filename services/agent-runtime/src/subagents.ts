@@ -171,7 +171,7 @@ function clampReport(text: string): string {
  *  so a still-working subagent can be inspected rather than only awaited. */
 export function subagentReport(run: SubagentRun): LastAssistantResult {
   if (!run.piSessionId) return { text: "", error: null };
-  const result = lastAssistantResult(run.cwd, run.piSessionId);
+  const result = lastAssistantResult(run.piSessionId);
   // Aborting the child writes "Request was aborted" into its transcript as an
   // assistant error; adopting it would paint a deliberate stop as a failure.
   return { text: clampReport(result.text), error: run.status === "cancelled" ? null : result.error };

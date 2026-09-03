@@ -1,26 +1,7 @@
-import { openSync, readSync, closeSync, statSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { agentCore } from "./agent-core";
 import { harnessStoreRoot } from "./data-dir";
-import { findSessionFile } from "./sessions-store";
 import { isRecord } from "../../../shared/agent/guards";
-
-const TAIL_BYTES = 256 * 1024;
-
-function readTail(filepath: string): string {
-  const { size } = statSync(filepath);
-  const start = Math.max(0, size - TAIL_BYTES);
-  const length = size - start;
-  const buffer = Buffer.alloc(length);
-  const fd = openSync(filepath, "r");
-  try {
-    readSync(fd, buffer, 0, length, start);
-  } finally {
-    closeSync(fd);
-  }
-  return buffer.toString("utf8");
-}
 
 /** Flatten a pi message `content` field to its plain text. Shared with the goal
  *  driver, which reads assistant text off the live event stream rather than the
@@ -67,9 +48,9 @@ export function lastAssistantResultFromJsonl(raw: string): LastAssistantResult {
   return { text, error };
 }
 
-/** The harness core's transcript is `sessions.db`: the session's mutations, oldest
- *  first, each wrapping one entry in the vocabulary pi writes — so the JSONL
- *  reader applies unchanged once the entries are laid out one per line. */
+/** The transcript is `sessions.db`: the session's mutations, oldest first, each
+ *  wrapping one entry in the vocabulary pi wrote — so the JSONL reader applies
+ *  unchanged once the entries are laid out one per line. */
 function harnessTranscript(sessionId: string): string | null {
   let db: DatabaseSync | null = null;
   try {
@@ -85,16 +66,8 @@ function harnessTranscript(sessionId: string): string | null {
   }
 }
 
-export function lastAssistantResult(cwd: string, piSessionId: string): LastAssistantResult {
-  if (agentCore() === "harness") {
-    const transcript = harnessTranscript(piSessionId);
-    return transcript === null ? { text: "", error: null } : lastAssistantResultFromJsonl(transcript);
-  }
-  const filepath = findSessionFile(cwd, piSessionId);
-  if (!filepath) return { text: "", error: null };
-  try {
-    return lastAssistantResultFromJsonl(readTail(filepath));
-  } catch {
-    return { text: "", error: null };
-  }
+/** The last assistant text (and any trailing error) a session has written so far. */
+export function lastAssistantResult(piSessionId: string): LastAssistantResult {
+  const transcript = harnessTranscript(piSessionId);
+  return transcript === null ? { text: "", error: null } : lastAssistantResultFromJsonl(transcript);
 }

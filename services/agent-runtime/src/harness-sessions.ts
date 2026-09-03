@@ -85,6 +85,8 @@ function tailStart(entries: readonly Entry[], tail: number): number {
 
 export interface HarnessSessionStore {
   readonly repo: SqliteSessionRepo;
+  /** Whether `sessionId` exists and belongs to `cwd`. */
+  hasSession(cwd: string, sessionId: string): boolean;
   listSessions(cwd: string, options?: ListSessionsOptions): Promise<SessionSummary[]>;
   loadSession(cwd: string, sessionId: string, options?: LoadSessionOptions): Promise<LoadSessionResult>;
   close(): void;
@@ -208,7 +210,12 @@ export function createHarnessSessionStore(storeRoot: string): HarnessSessionStor
     };
   }
 
-  return { repo, listSessions, loadSession, close: () => repo.close() };
+  const hasSession = (cwd: string, sessionId: string) => {
+    const row = rowQuery.get(sessionId);
+    return row !== undefined && sameCwd(row.cwd, cwd);
+  };
+
+  return { repo, hasSession, listSessions, loadSession, close: () => repo.close() };
 }
 
 /** The process-wide store under `ACE_STORE_ROOT` — shared by the harness driver and the http session handlers. */
