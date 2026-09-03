@@ -15,7 +15,6 @@ import type {
   WorkspaceState,
 } from "@/features/agent/workspace/types";
 import { activeSession } from "@/features/agent/runtime/selectors";
-import { terminalOwnerFor } from "@/features/agent/terminal-owners";
 import { collectLeaves } from "@/features/agent/workspace/layout";
 import type { WorkspaceHandles } from "@/features/agent/ui/use-workspace";
 
@@ -207,8 +206,6 @@ const WorkspacePane = memo(function WorkspacePane({
         onRenameSession={(tabId, title) => handles.renameTab(view.paneId, tabId, title)}
         onClose={view.canClose ? () => handles.closePane(view.paneId) : undefined}
         onForkSession={() => handles.splitTabIntoNewPane(view.paneId, view.pane.sessionId)}
-        terminalOwner={terminalOwnerFor(view.project, view.session)}
-        onOpenTerminal={() => tools.setComputerTab("terminal")}
         rightPanelOpen={tools.computer.open}
         onToggleRightPanel={tools.toggleComputerOpen}
         onRegisterHandle={(handle) => handles.registerPaneHandle(view.paneId, handle)}
