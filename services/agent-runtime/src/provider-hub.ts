@@ -1,12 +1,11 @@
 //
-// Provider hub: one shared pi ModelRuntime for the whole runtime process.
+// Provider hub: one shared ModelRuntime (vendored from pi-coding-agent) for the whole runtime process.
 //
-// Owns sign-in to model providers (OAuth and API-key) through pi's provider
-// auth: credentials persist to <dataDir>/pi-agent/auth.json — the same
-// file/format the pi CLI uses — and OAuth refresh runs inside the store's
-// serialized write path at request time. Sessions receive this instance via
-// createAgentSessionServices({ modelRuntime }), so a login is live for the
-// next turn without a restart.
+// Owns sign-in to model providers (OAuth and API-key) through pi-ai's provider
+// auth: credentials persist to ~/.pi/agent/auth.json — the same file/format the
+// pi CLI uses — and OAuth refresh runs inside the store's serialized write path
+// at request time. The signed-in models are listed in the picker
+// (listProviderAgentModels); routing a turn to one is not wired on the harness.
 //
 // Login flows are provider-owned and interactive (browser URLs, device codes,
 // key prompts). The hub bridges them to HTTP as in-memory jobs: AuthEvents
@@ -17,7 +16,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { ModelRuntime } from "@local-studio/harness/providers";
 import type {
   AuthEvent,
   AuthInteraction,

@@ -1,40 +1,40 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { encodeCwdForPi } from "../src/sessions-store";
+import { createHarnessSessionStore, type HarnessSessionStore } from "../src/harness-sessions";
 import { subagentReport, type SubagentRun } from "../src/subagents";
 
-const temporaryRoots: string[] = [];
+let root: string;
+let store: HarnessSessionStore;
+const cwd = "/work/project";
 
-afterAll(() => {
-  for (const root of temporaryRoots) rmSync(root, { recursive: true, force: true });
+beforeAll(() => {
+  root = mkdtempSync(path.join(tmpdir(), "subagents-"));
+  process.env.ACE_STORE_ROOT = root;
+  store = createHarnessSessionStore(root);
 });
 
-/** A child transcript whose last assistant entry is the abort marker pi
- *  writes when a run is stopped mid-flight. */
-function writeAbortedTranscript(piSessionId: string): string {
-  const root = mkdtempSync(path.join(tmpdir(), "subagents-"));
-  temporaryRoots.push(root);
-  const agentDir = path.join(root, "pi-agent");
-  process.env.PI_CODING_AGENT_DIR = agentDir;
-  const cwd = path.join(root, "project");
-  mkdirSync(cwd, { recursive: true });
-  const sessionDir = path.join(agentDir, "sessions", encodeCwdForPi(cwd));
-  mkdirSync(sessionDir, { recursive: true });
-  const lines = [
-    JSON.stringify({ type: "session", id: piSessionId, cwd }),
-    JSON.stringify({
-      type: "message",
-      message: { role: "assistant", content: [{ type: "text", text: "partial work" }] },
-    }),
-    JSON.stringify({
-      type: "message",
-      message: { role: "assistant", content: [], errorMessage: "Request was aborted" },
-    }),
-  ];
-  writeFileSync(path.join(sessionDir, `rollout_${piSessionId}.jsonl`), `${lines.join("\n")}\n`);
-  return cwd;
+afterAll(() => {
+  store.close();
+  rmSync(root, { recursive: true, force: true });
+});
+
+/** A child transcript whose last assistant entry is the abort marker the
+ *  harness writes when a run is stopped mid-flight. */
+async function writeAbortedTranscript(piSessionId: string): Promise<void> {
+  const session = await store.repo.create({ id: piSessionId, cwd });
+  await session.appendMessage({
+    role: "assistant",
+    content: [{ type: "text", text: "partial work" }],
+    timestamp: Date.now(),
+  } as never);
+  await session.appendMessage({
+    role: "assistant",
+    content: [],
+    errorMessage: "Request was aborted",
+    timestamp: Date.now(),
+  } as never);
 }
 
 function runWith(status: SubagentRun["status"], piSessionId: string, cwd: string): SubagentRun {
@@ -53,17 +53,17 @@ function runWith(status: SubagentRun["status"], piSessionId: string, cwd: string
 }
 
 describe("subagentReport", () => {
-  test("a cancelled run does not adopt the transcript's abort marker as an error", () => {
+  test("a cancelled run does not adopt the transcript's abort marker as an error", async () => {
     const piSessionId = "01a02222-0000-7000-8000-000000000001";
-    const cwd = writeAbortedTranscript(piSessionId);
+    await writeAbortedTranscript(piSessionId);
     const report = subagentReport(runWith("cancelled", piSessionId, cwd));
     expect(report.error).toBeNull();
     expect(report.text).toBe("partial work");
   });
 
-  test("a failed run still surfaces the transcript error", () => {
+  test("a failed run still surfaces the transcript error", async () => {
     const piSessionId = "01a02222-0000-7000-8000-000000000002";
-    const cwd = writeAbortedTranscript(piSessionId);
+    await writeAbortedTranscript(piSessionId);
     const report = subagentReport(runWith("error", piSessionId, cwd));
     expect(report.error).toBe("Request was aborted");
     expect(report.text).toBe("partial work");

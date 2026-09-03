@@ -3,11 +3,12 @@
   "version": "0.84.3",
   "private": true,
   "type": "module",
-  "description": "Vendored @earendil-works/pi-agent-core 0.84.3 (agent loop, harness, session tree, tools).",
+  "description": "Vendored @earendil-works/pi-agent-core 0.84.3 (agent loop, harness, session tree, tools) plus the pi-coding-agent grep/find/ls tools and provider sign-in modules.",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
     "./node": "./src/node.ts",
+    "./providers": "./src/providers/index.ts",
     "./session/testing": "./src/harness/session/testing/index.ts",
     "./session/state": "./src/harness/session/state.ts"
   },
@@ -16,6 +17,7 @@
     "@earendil-works/pi-telemetry": "0.84.3",
     "diff": "8.0.4",
     "ignore": "7.0.5",
+    "proper-lockfile": "4.1.2",
     "typebox": "1.3.7",
     "yaml": "2.9.0"
   }

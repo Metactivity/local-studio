@@ -11,6 +11,9 @@ export {
 	type EditToolDetails,
 	type EditToolInput,
 } from "./edit.ts";
+export { createFindTool, type FindToolDetails, type FindToolInput, relativizeFindResultPath } from "./find.ts";
+export { createGrepTool, type GrepToolDetails, type GrepToolInput } from "./grep.ts";
+export { createLsTool, type LsToolDetails, type LsToolInput } from "./ls.ts";
 export {
 	createReadTool,
 	type ReadImageProcessor,

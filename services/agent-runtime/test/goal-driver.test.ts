@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { attachGoalDriver, markGoalTurnAborted } from "../src/goal-driver";
 import { readGoal, writeGoal } from "../src/goals-store";
-import type { LoggedPiEvent, PiAgentSession } from "../src/pi-runtime-types";
+import type { LoggedPiEvent, PiAgentSession } from "../src/harness-runtime";
 
 const PI_SESSION_ID = "goal-driver-test-session";
 const temporaryRoots: string[] = [];

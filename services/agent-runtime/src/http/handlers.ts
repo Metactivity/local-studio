@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { Effect } from "effect";
-import { createAgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import {
   controlTargetHasActiveTurn,
   isAgentThinkingLevel,
@@ -25,9 +24,9 @@ import {
 } from "../../../../shared/agent/composer-refs";
 import { isAgentSettledEvent } from "../../../../shared/agent/pi-events";
 import { markGoalTurnAborted } from "../goal-driver";
-import { piResourceDiagnostics, piRuntimeManager } from "../pi-runtime";
-import type { LoggedPiEvent, PiAgentSession, PiAgentStatus } from "../pi-runtime-types";
-import { listSessions } from "../sessions-store";
+import type { LoggedPiEvent, PiAgentSession, PiAgentStatus } from "../harness-runtime";
+import { piRuntimeManager } from "../runtime-manager";
+import { listSessions } from "../harness-sessions";
 import {
   sessionListChangedVersion,
   subscribeSessionListChanged,
@@ -280,29 +279,6 @@ export async function handleAgentAbort(request: Request): Promise<Response> {
   // front of the user instead of dropping them on the floor.
   const cleared = await session.abort();
   return Response.json({ ok: true, cleared });
-}
-
-export async function handleExtensionUiResponse(request: Request): Promise<Response> {
-  const body = (await request.json().catch(() => null)) as
-    | {
-        sessionId?: unknown;
-        requestId?: unknown;
-        value?: unknown;
-        confirmed?: unknown;
-        cancelled?: unknown;
-      }
-    | null;
-  const sessionId = typeof body?.sessionId === "string" ? body.sessionId.trim() : "";
-  const requestId = typeof body?.requestId === "string" ? body.requestId.trim() : "";
-  if (!sessionId || !requestId) return jsonError("sessionId and requestId are required");
-  const resolved = piRuntimeManager.findSessionForLookup(sessionId);
-  if (!resolved) return jsonError("Runtime session not found", 404);
-  const accepted = resolved.session.respondExtensionUi(requestId, {
-    ...(typeof body?.value === "string" ? { value: body.value.slice(0, 32_000) } : {}),
-    ...(typeof body?.confirmed === "boolean" ? { confirmed: body.confirmed } : {}),
-    cancelled: body?.cancelled === true,
-  });
-  return accepted ? Response.json({ ok: true }) : jsonError("Extension request is no longer active", 409);
 }
 
 // ─── POST /api/agent/compact ──────────────────────────────────────────────
@@ -570,18 +546,8 @@ export function handleSessionListChanged(request: Request): Response {
 export function handleSetupChecks(): Response {
   const codexDir = path.join(homedir(), ".codex");
   const piDir = path.join(homedir(), ".pi");
-  // First-party extension load failures captured during the most recent SDK
-  // runtime creation. User/drop-in Pi extensions are intentionally disabled.
-  const diagnostics = piResourceDiagnostics();
   return Response.json({
     checks: [
-      {
-        id: "pi-sdk",
-        label: "Pi SDK",
-        ok: typeof createAgentSessionRuntime === "function",
-        value: "@earendil-works/pi-coding-agent",
-        guidance: "The agent runtime is provided by the bundled Pi SDK package.",
-      },
       {
         id: "pi-dir",
         label: "Pi data directory",
@@ -597,6 +563,5 @@ export function handleSetupChecks(): Response {
         guidance: "Optional but recommended for skills parity.",
       },
     ],
-    diagnostics,
   });
 }

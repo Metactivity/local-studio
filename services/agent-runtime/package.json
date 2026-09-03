@@ -3,7 +3,7 @@
   "version": "2.1.0",
   "private": true,
   "type": "module",
-  "description": "Standalone local Pi agent runtime, filesystem services, connectors, and browser host.",
+  "description": "Standalone local agent runtime (ACE-rooted harness core), filesystem services, connectors, and browser host.",
   "exports": {
     ".": "./src/index.ts",
     "./*": "./src/*.ts"
@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.3",
-    "@earendil-works/pi-coding-agent": "0.84.2",
     "@hono/node-server": "^2.0.12",
     "@local-studio/harness": "workspace:*",
     "@lydell/node-pty": "1.2.0-beta.12",

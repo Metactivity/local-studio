@@ -86,6 +86,6 @@ describe("session options", () => {
     process.env.LOCAL_STUDIO_OBSIDIAN_CONFIG = path.join(tmpdir(), "no-such-obsidian.json");
     const options = buildAgentSessionOptionsSync({ options: {}, processEnv: {} as NodeJS.ProcessEnv });
     expect(options.envInjections.LOCAL_STUDIO_OBSIDIAN_VAULTS).toBeUndefined();
-    expect(options.extensionPaths.some((entry) => entry.endsWith("obsidian.ts"))).toBe(false);
+    expect(options.toolGates.obsidian).toBe(false);
   });
 });

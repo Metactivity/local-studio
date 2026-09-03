@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { uuidv7 } from "@local-studio/harness";
 import { createHarnessSessionStore, type HarnessSessionStore } from "../src/harness-sessions";
+import { lastAssistantResult } from "../src/session-text";
 
 let root: string;
 let store: HarnessSessionStore;
@@ -19,6 +20,7 @@ const text = (role: "user" | "assistant", body: string, extra: Record<string, un
 beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), "harness-sessions-"));
   process.env.LOCAL_STUDIO_DATA_DIR = join(root, "data");
+  process.env.ACE_STORE_ROOT = root;
   store = createHarnessSessionStore(root);
   const session = await store.repo.create({ id: "s1", cwd });
   await session.appendEntry({ type: "model_change", id: uuidv7(), provider: "spark", modelId: "qwen3.8" }, "main");
@@ -75,5 +77,12 @@ describe("harness session store", () => {
     expect(earlier.cursor).toBeNull();
 
     expect(await store.loadSession("/work/elsewhere", "s1")).toEqual({ events: [], cursor: null, meta: null });
+  });
+
+  test("answers session lookups and the last assistant result from sessions.db", () => {
+    expect(store.hasSession(cwd, "s1")).toBe(true);
+    expect(store.hasSession("/work/elsewhere", "s1")).toBe(false);
+    expect(lastAssistantResult("s1")).toEqual({ text: "Done.", error: null });
+    expect(lastAssistantResult("nope")).toEqual({ text: "", error: null });
   });
 });

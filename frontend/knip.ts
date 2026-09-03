@@ -4,7 +4,6 @@ const config = {
     "desktop/main.ts",
     "desktop/preload.ts",
     "desktop/app-identity.ts",
-    "desktop/resources/pi-extensions/*.ts",
   ],
   project: ["src/**/*.{ts,tsx}", "desktop/**/*.{ts,tsx}"],
   ignore: [".next/**", ".next-dev/**", "node_modules/**"],

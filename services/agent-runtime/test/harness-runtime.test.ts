@@ -7,6 +7,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetAceService } from "../src/ace/ace-service";
+import { writeGoal } from "../src/goals-store";
 import { HarnessSession } from "../src/harness-runtime";
 import { startFakeLlamaServer, type FakeLlamaServer, type ScriptedReply } from "./support/fake-llama-server";
 
@@ -119,6 +120,53 @@ describe("HarnessSession", () => {
         ["list_automations", false, "No automations are scheduled. Use schedule_automation to create one."],
         ["subagent_list", false, "This session has not spawned any subagents."],
       ]);
+    } finally {
+      await session.stop();
+      server.stop();
+    }
+  }, 30_000);
+
+  test("a /template message expands like pi did and the session goal reaches the system prompt", async () => {
+    const templateDir = join(root, "prompts");
+    Bun.spawnSync(["mkdir", "-p", templateDir]);
+    const templatePath = join(templateDir, "greet.md");
+    await Bun.write(templatePath, "---\ndescription: Greet people.\n---\nSay hello to $1, then to $2. All: $@\n");
+    await Bun.write(join(cwd, "AGENTS.md"), "Always answer in haiku.\n");
+    const server = startFakeLlamaServer([{ text: "Hello Alice, hello Bob." }, { text: "Still here." }]);
+    const session = driver(server);
+    try {
+      await session.ensureStarted("fake-qwen3.8", cwd, null, {
+        thinkingLevel: "low",
+        promptTemplates: [{ id: "local-studio:greet", name: "greet", path: templatePath }],
+      });
+      await writeGoal(session.status.piSessionId!, { objective: "Greet everyone in the room", status: "active" });
+      await session.prompt('/greet Alice "Bob Jr"', () => undefined);
+      await session.prompt("/missing template stays as typed", () => undefined);
+
+      const chats = server.seen.filter((seen) => seen.path === "/v1/chat/completions").map((seen) => seen.body!);
+      const messages = (index: number) => chats[index]!.messages as Array<{ role: string; content: string | Array<{ text: string }> }>;
+      const userText = (index: number) => (messages(index).at(-1)!.content as Array<{ text: string }>)[0]!.text;
+      const system = messages(0)[0]!.content as string;
+      expect(system).toContain("<objective>Greet everyone in the room</objective>");
+      expect(system).toContain(`<project_instructions path="${join(cwd, "AGENTS.md")}">\nAlways answer in haiku.\n\n</project_instructions>`);
+      expect(system).toContain(`Current working directory: ${cwd}`);
+      expect(userText(0)).toBe("Say hello to Alice, then to Bob Jr. All: Alice Bob Jr");
+      expect(userText(1)).toBe("/missing template stays as typed");
+    } finally {
+      await session.stop();
+      server.stop();
+    }
+  }, 30_000);
+
+  test("read-only access keeps pi's read/grep/find/ls set", async () => {
+    const server = startFakeLlamaServer([{ text: "Looked, did not touch." }]);
+    const session = driver(server);
+    try {
+      await session.ensureStarted("fake-qwen3.8", cwd, null, { thinkingLevel: "low", toolAccess: "read_only" });
+      await session.prompt("Look around.", () => undefined);
+      const request = server.seen.find((seen) => seen.path === "/v1/chat/completions")!.body!;
+      const advertised = (request.tools as Array<{ function: { name: string } }>).map((tool) => tool.function.name).sort();
+      expect(advertised).toEqual(["find", "grep", "ls", "read"]);
     } finally {
       await session.stop();
       server.stop();
