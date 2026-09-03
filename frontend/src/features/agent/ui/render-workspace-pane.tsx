@@ -38,19 +38,10 @@ export type WorkspacePaneView = {
   cwd: string;
   modelId: string;
   model: AgentModel | null;
-  gitSummary: ReturnType<ProjectsContextValue["gitSummary"]>;
-  gitBranch: string | null;
   isNewSession: boolean;
   canClose: boolean;
   isFocused: boolean;
 };
-
-function paneGitBranch(
-  summary: ReturnType<ProjectsContextValue["gitSummary"]>,
-  project: Project | null,
-): string | null {
-  return summary?.isRepo === false ? null : (summary?.branch ?? project?.branch ?? null);
-}
 
 function resolvePaneModelId(
   sessionModelId: string | undefined,
@@ -88,7 +79,6 @@ function selectWorkspacePaneView(
   const session = activeSession(state, paneId);
   const project = projects.resolveProject(session);
   const modelId = resolvePaneModelId(session?.modelId, state.selectedModel, state.models);
-  const gitSummary = projects.gitSummary(project?.path);
   return {
     paneId,
     pane,
@@ -97,8 +87,6 @@ function selectWorkspacePaneView(
     cwd: session?.cwd ?? project?.path ?? projects.agentCwd,
     modelId,
     model: state.models.find((model) => model.id === modelId) ?? null,
-    gitSummary,
-    gitBranch: paneGitBranch(gitSummary, project),
     isNewSession: Boolean(session && !session.piSessionId && session.messages.length === 0),
     canClose: collectLeaves(state.layout).length > 1,
     isFocused: state.focusedPaneId === paneId,
@@ -117,8 +105,6 @@ export function sameWorkspacePaneView(
     previous.cwd === next.cwd &&
     previous.modelId === next.modelId &&
     previous.model === next.model &&
-    previous.gitSummary === next.gitSummary &&
-    previous.gitBranch === next.gitBranch &&
     previous.isNewSession === next.isNewSession &&
     previous.canClose === next.canClose &&
     previous.isFocused === next.isFocused
@@ -189,9 +175,6 @@ const WorkspacePane = memo(function WorkspacePane({
         contextWindow={view.model?.contextWindow ?? 0}
         cwd={view.cwd}
         projectName={view.project?.name ?? null}
-        gitBranch={view.gitBranch}
-        gitSummary={view.gitSummary}
-        onInitGit={handles.initGitForActiveProject}
         modelSelector={(reasoning) => (
           <AgentModelPicker
             models={models}

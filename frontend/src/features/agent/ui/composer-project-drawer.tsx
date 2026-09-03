@@ -2,10 +2,9 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import { ChevronDown, FolderOpen, ListChecks, Plus } from "@/ui/icon-registry";
-import { GitBranchIcon } from "@/ui/icons";
 import { useMountSubscription } from "@/hooks/use-mount-subscription";
 import { useProjects } from "@/features/agent/projects/context";
-import type { GitSummary, Project } from "@/features/agent/projects/types";
+import type { Project } from "@/features/agent/projects/types";
 import { GoalCard, type GoalDraft } from "@/features/agent/ui/goal-card";
 import { GoalStrip } from "@/features/agent/ui/goal-strip";
 import { useSessionGoal } from "@/features/agent/ui/use-session-goal";
@@ -28,10 +27,6 @@ export function ComposerProjectDrawer({
   revision,
   projectName,
   cwd,
-  gitBranch,
-  gitSummary,
-  onInitGit,
-  onOpenDiff,
   canPickProject,
   onProjectPicked,
   queueItems,
@@ -44,10 +39,6 @@ export function ComposerProjectDrawer({
   revision: number;
   projectName: string | null;
   cwd: string;
-  gitBranch?: string | null;
-  gitSummary?: GitSummary | null;
-  onInitGit?: () => void;
-  onOpenDiff: () => void;
   canPickProject: boolean;
   onProjectPicked: (project: Project) => void;
   queueItems: QueuedMessage[];
@@ -145,15 +136,6 @@ export function ComposerProjectDrawer({
               onClear={() => void clearGoal()}
             />
             <div className="my-1 h-px shrink-0 bg-(--separator)" />
-            <GitRow
-              gitSummary={gitSummary}
-              gitBranch={gitBranch}
-              onInitGit={onInitGit}
-              onOpenDiff={() => {
-                setOpen(false);
-                onOpenDiff();
-              }}
-            />
             <ProjectList
               canPickProject={canPickProject}
               cwd={cwd}
@@ -167,54 +149,6 @@ export function ComposerProjectDrawer({
       </section>
     </>
   );
-}
-
-function GitRow({
-  gitSummary,
-  gitBranch,
-  onInitGit,
-  onOpenDiff,
-}: {
-  gitSummary?: GitSummary | null;
-  gitBranch?: string | null;
-  onInitGit?: () => void;
-  onOpenDiff: () => void;
-}) {
-  if (gitSummary?.isRepo) {
-    return (
-      <button
-        type="button"
-        onClick={onOpenDiff}
-        className={cx(listRowClass, "hover:bg-(--hover)")}
-        title="View changes"
-      >
-        <GitBranchIcon className="h-3.5 w-3.5 shrink-0 text-(--fg)/56" />
-        <span className="min-w-0 flex-1 truncate text-(--fg)/72">
-          {gitBranch ?? gitSummary.branch ?? "git"}
-        </span>
-        <span className="flex shrink-0 items-center gap-1 font-mono text-[length:var(--fs-xs)] tabular-nums">
-          <span className="text-(--ok)">+{gitSummary.additions}</span>
-          <span className="text-(--err)">-{gitSummary.deletions}</span>
-          {gitSummary.statusCount > 0 ? (
-            <span className="text-(--dim)">· {gitSummary.statusCount} files</span>
-          ) : null}
-        </span>
-      </button>
-    );
-  }
-  if (gitSummary && !gitSummary.isRepo && onInitGit) {
-    return (
-      <button
-        type="button"
-        onClick={onInitGit}
-        className={cx(listRowClass, "text-(--fg)/56 hover:bg-(--hover) hover:text-(--fg)/82")}
-      >
-        <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
-        Initialize git
-      </button>
-    );
-  }
-  return null;
 }
 
 function ProjectList({

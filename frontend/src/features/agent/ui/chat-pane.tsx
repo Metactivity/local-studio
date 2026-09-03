@@ -18,7 +18,6 @@ import { builtinCommandProvider } from "@/features/agent/composer/builtin-comman
 import { AutomationDrawer } from "@/features/agent/ui/automation-drawer";
 import { ComposerProjectDrawer } from "@/features/agent/ui/composer-project-drawer";
 import { TranscriptSessionContext } from "@/features/agent/ui/timeline/subagent-row";
-import { GitDiffDrawer } from "@/features/agent/ui/git-diff-drawer";
 import {
   promptTemplateCommandProvider,
   skillCommandProvider,
@@ -63,7 +62,7 @@ import { respondExtensionUi } from "@/features/agent/runtime/api";
 import { useSessionEngine } from "@/features/agent/runtime/engine";
 import type { Session, UpdateSession } from "@/features/agent/runtime/types";
 import { useTools } from "@/features/agent/tools/context";
-import type { GitSummary, Project } from "@/features/agent/projects/types";
+import type { Project } from "@/features/agent/projects/types";
 import type { BrowserBackend } from "@/features/agent/tools/types";
 import type { AgentThinkingLevel } from "@/features/agent/contracts";
 import {
@@ -172,25 +171,25 @@ function ChatTranscript({
   if (composerOnly) return null;
   return (
     <TranscriptSessionContext value={transcriptSession}>
-    <div className={terminalView ? "hidden" : "flex min-h-0 min-w-0 flex-1"}>
-      {showEmptyPrompt ? (
-        <EmptyPromptTimeline />
-      ) : (
-        <Timeline
-          key={activeTab?.id ?? "empty"}
-          stickToBottom={stickToBottom}
-          onStickToBottomChange={setStickToBottom}
-          messages={activeTab?.messages ?? []}
-          running={running}
-          cwd={cwd || null}
-          viewKey={viewKey}
-          viewAlias={viewAlias}
-          onForkSession={onForkSession}
-          hasEarlier={activeTab?.historyCursor != null}
-          onLoadEarlier={loadEarlierHistory}
-        />
-      )}
-    </div>
+      <div className={terminalView ? "hidden" : "flex min-h-0 min-w-0 flex-1"}>
+        {showEmptyPrompt ? (
+          <EmptyPromptTimeline />
+        ) : (
+          <Timeline
+            key={activeTab?.id ?? "empty"}
+            stickToBottom={stickToBottom}
+            onStickToBottomChange={setStickToBottom}
+            messages={activeTab?.messages ?? []}
+            running={running}
+            cwd={cwd || null}
+            viewKey={viewKey}
+            viewAlias={viewAlias}
+            onForkSession={onForkSession}
+            hasEarlier={activeTab?.historyCursor != null}
+            onLoadEarlier={loadEarlierHistory}
+          />
+        )}
+      </div>
     </TranscriptSessionContext>
   );
 }
@@ -206,9 +205,6 @@ type Props = {
   cwd: string;
   projectName: string | null;
   modelSelector?: (props: ComposerModelSelectorProps) => ReactNode;
-  gitBranch?: string | null;
-  gitSummary?: GitSummary | null;
-  onInitGit?: () => void;
   browserToolEnabled: boolean;
   browserBackend: BrowserBackend;
   onToggleBrowserBackend: () => void;
@@ -255,9 +251,6 @@ export function ChatPane({
   cwd,
   projectName,
   modelSelector,
-  gitBranch,
-  gitSummary,
-  onInitGit,
   browserToolEnabled,
   browserBackend,
   onToggleBrowserBackend,
@@ -443,9 +436,6 @@ export function ChatPane({
     tools.setComputerTab("status");
     tools.setComputerOpen(true);
   }, [tools]);
-  const [diffDrawerOpen, setDiffDrawerOpen] = useState(false);
-  const openDiffDrawer = useCallback(() => setDiffDrawerOpen(true), []);
-  const closeDiffDrawer = useCallback(() => setDiffDrawerOpen(false), []);
   const exportSession = useCallback(() => {
     if (!activeTab) return;
     const markdown = sessionToMarkdown(activeTab.messages, displayedSessionTitle);
@@ -687,14 +677,6 @@ export function ChatPane({
         loadEarlierHistory={loadEarlierHistory}
       />
       <div className={terminalView ? "hidden" : "contents"}>
-        {diffDrawerOpen ? (
-          <GitDiffDrawer
-            cwd={cwd || null}
-            gitBranch={gitBranch}
-            gitSummary={gitSummary}
-            onClose={closeDiffDrawer}
-          />
-        ) : null}
         {automationDrawerOpen ? (
           <AutomationDrawer
             modelId={modelId}
@@ -713,8 +695,6 @@ export function ChatPane({
           currentContextTokens={currentContextTokens}
           cwd={cwd}
           fileInputRef={fileInputRef}
-          gitBranch={gitBranch}
-          gitSummary={gitSummary}
           input={composerInput}
           mention={mention}
           mentionIndex={mentionIndex}
@@ -732,9 +712,7 @@ export function ChatPane({
             handleComposerKeyDown(event);
           }}
           onComposerPaste={handleComposerPaste}
-          onInitGit={onInitGit}
           onOpenStatus={openComputerStatus}
-          onOpenDiff={openDiffDrawer}
           onRemoveAttachment={removeAttachment}
           onRemoveLoadedContext={removeLoadedContext}
           onSelectMention={(entry) => void handleSelectMention(entry)}
@@ -749,10 +727,6 @@ export function ChatPane({
               revision={goalRevision}
               projectName={projectName}
               cwd={cwd}
-              gitBranch={gitBranch}
-              gitSummary={gitSummary}
-              onInitGit={onInitGit}
-              onOpenDiff={openDiffDrawer}
               showProjectRow={composerVisual.showProjectRow}
               running={Boolean(running)}
               onProjectPicked={handleProjectPicked}

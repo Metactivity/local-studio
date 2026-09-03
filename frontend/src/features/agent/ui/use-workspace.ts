@@ -72,7 +72,6 @@ export type WorkspaceHandles = {
   setDefaultModel: (modelId: string) => void;
   notifySessionsChanged: () => void;
   startComputerResize: (event: ReactMouseEvent<HTMLDivElement>) => void;
-  initGitForActiveProject: () => Promise<void>;
 };
 
 export type UseWorkspaceResult = {
@@ -345,16 +344,6 @@ export function useWorkspace({ ephemeral = false }: UseWorkspaceOptions = {}): U
         };
         window.addEventListener("mousemove", onMove);
         window.addEventListener("mouseup", onUp);
-      },
-      initGitForActiveProject: async () => {
-        try {
-          await projectsRef.current.initGitForActiveProject();
-        } catch (error) {
-          dispatch({
-            type: "setError",
-            error: error instanceof Error ? error.message : "Failed to initialize git repository",
-          });
-        }
       },
     }),
     [dispatch, ephemeral, getReplayQueue],
