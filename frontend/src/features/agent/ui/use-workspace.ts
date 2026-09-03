@@ -36,11 +36,19 @@ import {
   useWorkspaceRuntimeSync,
 } from "@/features/agent/ui/use-workspace-effects";
 import type { ChatPaneHandle } from "@/features/agent/ui/chat-pane";
-import type { SessionDropPayload } from "@/features/agent/ui/pane-grid";
 import {
   readDefaultAgentModel,
   writeDefaultAgentModel,
 } from "@/features/agent/workspace/model-preference";
+
+export type SessionDropPayload = {
+  piSessionId?: string | null;
+  projectId?: string;
+  cwd?: string;
+  paneId?: string;
+  tabId?: string;
+  title?: string;
+};
 
 export type WorkspaceHandles = {
   registerComputerAside: (element: HTMLElement | null) => void;

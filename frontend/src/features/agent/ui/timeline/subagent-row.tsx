@@ -6,8 +6,7 @@
 // children in one list, detached from the turn that started them, so a
 // transcript scrolled back three fan-outs told you nothing about which
 // subagents belonged to which request. Here the row sits in the conversation
-// at its own turn, and clicking it opens that child's session in the side
-// panel rather than navigating the workspace away from the parent.
+// at its own turn, and clicking it opens that child's session on the IDE page.
 //
 // Identity comes from two places, because neither alone covers the whole run:
 // the tool's own result carries the run id and pi session id but only once it
@@ -16,10 +15,11 @@
 // poll by name, and prefers whichever it has.
 
 import { createContext, useContext } from "react";
+import { useRouter } from "next/navigation";
 import { Spinner } from "@/ui";
 import { Bot, ChevronRight } from "@/ui/icon-registry";
 import type { ToolBlock } from "@/features/agent/messages";
-import { useToolsActions } from "@/features/agent/tools/context";
+import { useProjects } from "@/features/agent/projects/context";
 import {
   SUBAGENT_STATUS_DOT,
   subagentStatusLabel,
@@ -60,7 +60,8 @@ function matchRun(block: ToolBlock, runs: SubagentRun[]): SubagentRun | null {
 
 export function SubagentRow({ block }: { block: ToolBlock }) {
   const { piSessionId: parentPiSessionId, cwd } = useContext(TranscriptSessionContext);
-  const { requestSessionPreview } = useToolsActions();
+  const router = useRouter();
+  const projects = useProjects();
   const runs = useSubagents(parentPiSessionId);
   const run = matchRun(block, runs);
   const name = subagentName(block);
@@ -77,14 +78,17 @@ export function SubagentRow({ block }: { block: ToolBlock }) {
       type="button"
       disabled={!childPiSessionId}
       onClick={() => {
-        if (!childPiSessionId) return;
-        requestSessionPreview({ piSessionId: childPiSessionId, title: name, cwd });
+        const project = projects.findByPath(cwd) ?? projects.selectedProject;
+        if (!childPiSessionId || !project) return;
+        router.push(
+          `/ide?project=${encodeURIComponent(project.id)}&session=${encodeURIComponent(childPiSessionId)}&replace=1`,
+        );
       }}
       title={
         failure
           ? `${name} — failed: ${failure}`
           : childPiSessionId
-            ? `${name} — open this subagent's session in the panel`
+            ? `${name} — open this subagent's session in the IDE`
             : `${name} — starting`
       }
       className="group my-0.5 flex h-7 w-full items-center gap-2 rounded-[8px] px-1.5 text-left transition-colors hover:bg-(--hover) disabled:cursor-default"
