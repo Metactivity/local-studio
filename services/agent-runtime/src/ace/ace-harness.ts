@@ -186,6 +186,8 @@ export interface AceHarnessOptions {
   /** Provider request timeout for user turns. Default 10 min — local models write long answers. */
   streamTimeoutMs?: number;
   sessionId?: string;
+  /** Resume an already-open session instead of creating one; its branch seeds the transcript. */
+  session?: Session;
 }
 
 export interface TurnOptions {
@@ -215,10 +217,12 @@ export interface AceHarness {
   readonly journal: AceJournal;
   readonly aep: AepProjector;
   prompt(text: string, options?: TurnOptions): Promise<TurnResult>;
+  /** Manual history compaction; resolves with the summary, or null when there was nothing to compact. */
+  compact(customInstructions?: string): Promise<string | null>;
   close(): Promise<void>;
 }
 
-const DEFAULT_SYSTEM_PROMPT =
+export const DEFAULT_SYSTEM_PROMPT =
   "You are a coding agent working in the user's project directory. Use the tools to read, edit and run; be precise and brief.";
 const DEFAULT_STREAM_TIMEOUT_MS = 600_000;
 const BULLET_ID = /^\[([^\]]+)\]/;
@@ -290,8 +294,10 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
   const baseSystemPrompt = options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
   const streamTimeoutMs = options.streamTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
 
-  const session = await options.sessionRepo.create({ cwd, ...(options.sessionId ? { id: options.sessionId } : {}) });
+  const session =
+    options.session ?? (await options.sessionRepo.create({ cwd, ...(options.sessionId ? { id: options.sessionId } : {}) }));
   const sessionId = (await session.getMetadata()).id;
+  const branchMessages = async () => buildSessionContext(await session.findEntriesOnBranch({ order: "oldestFirst" })).messages;
   const journal = new AceJournal();
   const aep = new AepProjector(sessionId);
   const events = new EventBus();
@@ -318,7 +324,7 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
       model,
       thinkingLevel: options.thinkingLevel ?? "medium",
       tools: options.tools ?? createDefaultTools(cwd, ace),
-      messages: [],
+      messages: options.session ? await branchMessages() : [],
     },
     streamFn: (streamModel, context, streamOptions) =>
       models.streamSimple(streamModel, context, { timeoutMs: streamTimeoutMs, ...streamOptions }),
@@ -361,22 +367,28 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
   async function compactHistoryIfNeeded(context: PrepareNextTurnContext, signal: AbortSignal | undefined) {
     const estimate = estimateContextTokens(context.context.messages);
     if (!shouldCompact(estimate.tokens, profile.contextWindow, compaction)) return undefined;
+    const summary = await compactHistory(estimate.tokens, undefined, signal);
+    return summary === null ? undefined : { context: { ...context.context, messages: await branchMessages() } };
+  }
+
+  /** Summarise the branch into a compaction entry; null when there is nothing to compact or the summary failed. */
+  async function compactHistory(tokens: number, customInstructions: string | undefined, signal: AbortSignal | undefined) {
     const entries = await session.findEntriesOnBranch({ order: "oldestFirst" });
     const prepared = prepareCompaction(entries, compaction);
-    if (!prepared.ok || prepared.value === undefined) return undefined;
+    if (!prepared.ok || prepared.value === undefined) return null;
     const vetoes = await hooks.run<{ skip?: boolean }>("before_compaction", {
       turnId: currentTurnId,
-      tokens: estimate.tokens,
+      tokens,
       contextWindow: profile.contextWindow,
       preparation: prepared.value,
     } satisfies BeforeCompactionEvent);
-    if (vetoes.some((veto) => veto.skip)) return undefined;
-    aep.emit("context.limit", { usedTokens: estimate.tokens, maxTokens: profile.contextWindow, action: "compacting" }, currentTurnId);
+    if (vetoes.some((veto) => veto.skip)) return null;
+    aep.emit("context.limit", { usedTokens: tokens, maxTokens: profile.contextWindow, action: "compacting" }, currentTurnId);
     // ACE role calls run at low effort (plan W2).
-    const result = await compact(prepared.value, models, model, undefined, signal, "low");
+    const result = await compact(prepared.value, models, model, customInstructions, signal, "low");
     if (!result.ok) {
       journal.push(currentTurnId, "ace.degraded", { where: "history-compaction", error: result.error.message });
-      return undefined;
+      return null;
     }
     await session.appendEntry<CompactionEntry>(
       {
@@ -394,9 +406,9 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
       tokensBefore: result.value.tokensBefore,
       retainedMessages: result.value.retainedTail.length,
       summaryChars: result.value.summary.length,
+      summary: result.value.summary,
     });
-    const messages = buildSessionContext(await session.findEntriesOnBranch({ order: "oldestFirst" })).messages;
-    return { context: { ...context.context, messages } };
+    return result.value.summary;
   }
 
   // ---- ACE handlers, registered through the same registry as any subscriber ----
@@ -534,7 +546,7 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
     aep.emit("turn.completed", { stopReason, model: model.id }, turnId);
 
     // The session is the transcript of record: rebuild the Agent view from it (compactions included).
-    agent.state.messages = buildSessionContext(await session.findEntriesOnBranch({ order: "oldestFirst" })).messages;
+    agent.state.messages = await branchMessages();
 
     const records = journal.records(turnId);
     const evaluation = records.find((record): record is JournalRecord<"ace.evaluation"> => record.type === "ace.evaluation");
@@ -561,6 +573,12 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
     journal,
     aep,
     prompt,
+    async compact(customInstructions) {
+      if (agent.state.isStreaming) throw new Error("Cannot compact while the agent is running.");
+      const summary = await compactHistory(estimateContextTokens(agent.state.messages).tokens, customInstructions, undefined);
+      if (summary !== null) agent.state.messages = await branchMessages();
+      return summary;
+    },
     async close() {
       agent.abort();
       await agent.waitForIdle();
