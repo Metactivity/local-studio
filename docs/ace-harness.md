@@ -58,7 +58,9 @@ session gets a `model_change` entry so lists and replays know the model. `toolAc
 dispatches `listSessions` / `loadSession`): summaries from `sessions.db` (first/last user prompt, model, updated-at via
 `json_extract`), archive flags from the same metadata store as pi, and replays as pi-shaped events — one synthesized
 `{type:"session"}` header, then the branch entries (`message`, `compaction`, `model_change`) with `tail` / `before`
-paging on entry `seq`. Session data lives under `ACE_STORE_ROOT`; the pi JSONL store is untouched for `pi`.
+paging on entry `seq`. Session data lives under `ACE_STORE_ROOT`; the pi JSONL store is untouched for `pi`. The repo uses `node:sqlite`, so the
+same code runs under bun (dev, tests) and node (the packaged `standalone.mjs`); the harness modules are imported lazily
+behind the flag because `@metactivity/ace` ships TypeScript sources that node loads only from the bundle.
 
 Not on this core yet: pi extensions (browser, connectors, github, obsidian, subagents, automations tools), composer
 skills / prompt templates, extension UI prompts (`respondExtensionUi` returns false), goal-driver continuation runs on
