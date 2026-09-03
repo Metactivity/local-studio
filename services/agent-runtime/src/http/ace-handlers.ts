@@ -20,7 +20,7 @@ async function requireAce() {
   return jsonError(`ACE is not configured: ${problems.join("; ") || "no service"}`, 503);
 }
 
-function workspaceCwd(request: Request, body: Record<string, unknown> | null = null): string | Response {
+export function workspaceCwd(request: Request, body: Record<string, unknown> | null = null): string | Response {
   const query = new URL(request.url).searchParams.get("cwd");
   const { cwd } = sessionIdentity(request.headers, { cwd: typeof body?.cwd === "string" ? body.cwd : query });
   if (!cwd) return jsonError("cwd is required");

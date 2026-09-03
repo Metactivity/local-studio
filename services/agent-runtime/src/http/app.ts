@@ -115,6 +115,7 @@ import {
   handleSessionsList,
 } from "./session-handlers";
 import { handleGenerateSessionTitle } from "./title-handlers";
+import { handleIdeContext } from "./ide-handlers";
 
 // The runtime binds loopback only, so every legitimate request carries a
 // loopback Host. A browser tricked by DNS rebinding reaches the socket with
@@ -164,6 +165,7 @@ export function createAgentRuntimeApp() {
   app.get("/api/agent/ace/lens", (c) => handleAceLens(c.req.raw));
   app.post("/api/agent/ace/rebuild-graph", (c) => handleAceRebuildGraph(c.req.raw));
   app.post("/api/agent/ace/restart", () => handleAceRestart());
+  app.get("/api/agent/ide/context", (c) => handleIdeContext(c.req.raw));
   app.get("/api/agent/sessions", (c) => handleSessionsList(c.req.raw));
   app.delete("/api/agent/sessions", () => handleSessionsDelete());
   app.get("/api/agent/sessions/all", (c) => handleAllSessions(c.req.raw));
