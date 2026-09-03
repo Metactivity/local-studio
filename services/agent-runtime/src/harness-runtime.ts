@@ -16,6 +16,7 @@ import type { ImageContent } from "@earendil-works/pi-ai";
 import type { NativeService } from "@metactivity/ace";
 import {
   type AgentMessage,
+  type AgentTool,
   DEFAULT_COMPACTION_SETTINGS,
   estimateContextTokens,
   formatSkillsForSystemPrompt,
@@ -51,7 +52,10 @@ import { refreshPiModels, selectPiRuntimeModel, toPiThinkingLevel } from "./pi-r
 import { notifySessionListChanged } from "./session-list-changed";
 import { getApiSettings } from "./settings-service";
 import { resolvePiAgentDir } from "./user-plugins";
+import { ideBridge } from "./ide-bridge/server";
+import { ideContextBlock } from "./ide-bridge/context";
 import { builtinTools, type ToolContext, withAgentPolicy, withTimeoutPolicy } from "./tools";
+import { ideTools } from "./tools/ide";
 import type { AgentImageInput } from "../../../shared/agent/agent-image-input";
 import type { AgentQueueAction } from "../../../shared/agent/agent-turn";
 import type { RuntimeContextUsage } from "../../../shared/agent/context-usage";
@@ -241,6 +245,8 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   private promptTemplates: PromptTemplate[] = [];
   /** Texts waiting in the Agent's queues, in order — the Agent does not expose them. */
   private queued: { steering: string[]; followUp: string[] } = { steering: [], followUp: [] };
+  /** The session's tools without the IDE ones; `ide_*` join per turn while an IDE is connected for the folder. */
+  private baseTools: AgentTool[] = [];
 
   constructor(options: HarnessSessionOptions = {}) {
     super();
@@ -335,6 +341,16 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       },
       { id: "local-studio-goal" },
     );
+    // The IDE's latest state (ADR-034 M5) rides beside <ace-context>; nothing when no IDE is connected.
+    harness.hooks.on(
+      "transform_context",
+      () => {
+        const context = ideBridge().context(resolvedCwd);
+        const block = context ? ideContextBlock(context, resolvedCwd) : null;
+        return block ? { systemContext: [block] } : undefined;
+      },
+      { id: "local-studio-ide" },
+    );
 
     const offLoop = harness.events.on("loop", (event) => this.onLoopEvent(event as PiEvent));
     const offJournal = harness.journal.subscribe((record) => {
@@ -352,6 +368,7 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       offJournal();
     };
     this.harness = harness;
+    this.baseTools = harness.agent.state.tools;
     this.profile = profile;
     this.promptTemplates = promptTemplates;
     this.currentModelId = modelId;
@@ -400,6 +417,7 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       }
       this.activePromptCount += 1;
       this.lastError = null;
+      harness.agent.state.tools = this.toolsForTurn();
       try {
         await harness.prompt(message, options.images ? { images: options.images as ImageContent[] } : {});
       } catch (error) {
@@ -453,6 +471,12 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   adoptPiSessionId(piSessionId: string | null | undefined): void {
     const next = piSessionId?.trim();
     if (next && !this.currentSessionId) this.currentSessionId = next;
+  }
+
+  /** The base tools, plus the `ide_*` actions while an IDE is connected for this folder (like the chrome probe, per turn). */
+  private toolsForTurn(): AgentTool[] {
+    if (this.currentStartOptions.toolAccess === "read_only" || !ideBridge().isConnected(this.currentCwd)) return this.baseTools;
+    return [...this.baseTools, ...ideTools(this.currentCwd)];
   }
 
   /** What ACE did to this session's turns (router, lens, gates, compaction, evaluation) — the Context Lens source. */

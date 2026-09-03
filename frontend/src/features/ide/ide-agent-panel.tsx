@@ -9,7 +9,7 @@ import { useState } from "react";
 import { AceContextTab } from "@/features/ace/ace-context-tab";
 import { AceMemoryTab } from "@/features/ace/ace-memory-tab";
 import { AceStatusTab } from "@/features/ace/ace-status-tab";
-import { loadAceProposals } from "@/features/ace/api";
+import { loadAceProposals, loadIdeContext } from "@/features/ace/api";
 import { useAceResource } from "@/features/ace/use-ace-resource";
 import { useProjects } from "@/features/agent/projects/context";
 import type { Project } from "@/features/agent/projects/types";
@@ -75,6 +75,9 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
     cwd,
     tab === "memory",
   ]);
+  // The bridge pill: the extension host of the embedded workbench has said hello for this folder.
+  const bridge = useAceResource(cwd ? () => loadIdeContext(cwd) : null, [cwd, tab, piSessionId]);
+  const bridged = bridge.data?.connected === true;
 
   // A project switch reopens that folder's latest session, or starts a fresh one.
   useMountSubscription(() => {
@@ -142,7 +145,20 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
             connected ? "bg-(--active) text-(--fg)" : "bg-(--surface-2)/40 text-(--dim)",
           )}
         >
-          {connected ? "IDE connected" : "IDE loading"}
+          {connected ? "IDE loaded" : "IDE loading"}
+        </span>
+        <span
+          title={
+            bridged
+              ? "The editor is connected to the agent runtime (IDE bridge)"
+              : "No IDE bridge connection for this folder"
+          }
+          className={cx(
+            "rounded-full px-2 py-0.5 text-[length:var(--fs-xs)]",
+            bridged ? "bg-(--active) text-(--fg)" : "bg-(--surface-2)/40 text-(--dim)",
+          )}
+        >
+          {bridged ? "IDE connected" : "IDE offline"}
         </span>
       </nav>
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-(--border)/60 px-2">
@@ -192,7 +208,7 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
         )}
       </div>
       {tab === "context" ? (
-        <AceContextTab sessionId={focused?.id ?? null} piSessionId={piSessionId} />
+        <AceContextTab sessionId={focused?.id ?? null} piSessionId={piSessionId} cwd={cwd} />
       ) : null}
       {tab === "memory" ? <AceMemoryTab cwd={cwd} proposals={proposals} /> : null}
       {tab === "ace" ? <AceStatusTab cwd={cwd} /> : null}

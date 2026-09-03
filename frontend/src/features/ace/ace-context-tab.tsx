@@ -2,7 +2,12 @@
 
 import { Button } from "@/ui";
 import { StatusGroup, StatusLine } from "@/features/agent/ui/status-panel-parts";
-import { loadAceLens, type AceJournalRecord } from "@/features/ace/api";
+import {
+  loadAceLens,
+  loadIdeContext,
+  type AceJournalRecord,
+  type IdeContextReport,
+} from "@/features/ace/api";
 import { useAceResource } from "@/features/ace/use-ace-resource";
 import { AcePanelNotice } from "@/features/ace/ace-panel-notice";
 
@@ -167,19 +172,60 @@ function TurnLens({ records }: { records: AceJournalRecord[] }) {
   );
 }
 
+const fileName = (uri: string) => decodeURIComponent(uri.split("/").pop() ?? uri);
+
+/** The live editor state the bridge holds for this folder (ADR-034 M5): one chip per fact. */
+function IdeChips({ report }: { report: IdeContextReport }) {
+  const context = report.context;
+  if (!context) return <AcePanelNotice>No IDE connected for this folder.</AcePanelNotice>;
+  const editor = context.activeEditor;
+  const chips: string[] = [];
+  if (editor) {
+    const { start, end } = editor.selection;
+    const where =
+      start.line === end.line ? `L${start.line + 1}` : `L${start.line + 1}-${end.line + 1}`;
+    chips.push(`${fileName(editor.uri)} · ${where}`);
+  }
+  if (report.totals && report.totals.files > 0)
+    chips.push(`${report.totals.errors} errors · ${report.totals.warnings} warnings`);
+  if (context.scm)
+    chips.push(`${context.scm.branch ?? "detached"} · ${context.scm.changes.length} changed`);
+  if (context.tabs.length > 0) chips.push(`${context.tabs.length} tabs`);
+  return (
+    <ul className="flex flex-wrap gap-1.5">
+      {chips.length === 0 ? <AcePanelNotice>IDE connected — no editor open.</AcePanelNotice> : null}
+      {chips.map((chip) => (
+        <li
+          key={chip}
+          className="rounded-full bg-(--surface-2)/60 px-2 py-0.5 text-[length:var(--fs-xs)] text-(--fg)/80"
+        >
+          {chip}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function AceContextTab({
   sessionId,
   piSessionId,
+  cwd,
 }: {
   sessionId: string | null;
   piSessionId: string | null;
+  cwd: string;
 }) {
   const lens = useAceResource(sessionId ? () => loadAceLens(sessionId, piSessionId) : null, [
     sessionId,
     piSessionId,
   ]);
+  const ide = useAceResource(cwd ? () => loadIdeContext(cwd) : null, [cwd, sessionId]);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-4">
+      <StatusGroup title="IDE">
+        {ide.data ? <IdeChips report={ide.data} /> : null}
+        {ide.error ? <AcePanelNotice tone="error">{ide.error}</AcePanelNotice> : null}
+      </StatusGroup>
       {lens.error ? <AcePanelNotice tone="error">{lens.error}</AcePanelNotice> : null}
       {lens.data ? (
         <TurnLens records={lens.data} />
@@ -192,8 +238,11 @@ export function AceContextTab({
         <Button
           size="sm"
           variant="ghost"
-          disabled={!sessionId || lens.loading}
-          onClick={lens.reload}
+          disabled={lens.loading || ide.loading}
+          onClick={() => {
+            lens.reload();
+            ide.reload();
+          }}
         >
           Refresh
         </Button>

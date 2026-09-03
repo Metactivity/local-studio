@@ -3,9 +3,14 @@ import { agentCore } from "./agent-core";
 import { startAutomationScheduler } from "./automation-scheduler";
 import "./harness";
 import { createAgentRuntimeApp } from "./http/app";
+import { ideBridge } from "./ide-bridge/server";
 
 agentCore();
 startAutomationScheduler();
+// The embedded workbench connects here (ADR-034 M5); a failed listen is logged, the runtime still serves.
+ideBridge()
+  .listen()
+  .catch((error: unknown) => console.warn(`[ide-bridge] not listening: ${error instanceof Error ? error.message : String(error)}`));
 
 const { app } = createAgentRuntimeApp();
 const port = Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 8081;
