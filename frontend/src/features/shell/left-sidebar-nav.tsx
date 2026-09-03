@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { type ComponentType, type MouseEvent, type ReactNode } from "react";
-import { Activity, Layers, Plus, Zap } from "@/ui/icon-registry";
+import { Activity, Code, Layers, Plus, Zap } from "@/ui/icon-registry";
 
 export type IconComponent = ComponentType<{ className?: string; strokeWidth?: number }>;
 
 export const tabs = [
   { href: "/", label: "Status", icon: Activity },
   { href: "/models", label: "Models", icon: Layers },
+  { href: "/ide", label: "IDE", icon: Code },
   { href: "/agent/automations", label: "Automations", icon: Zap },
 ];
 

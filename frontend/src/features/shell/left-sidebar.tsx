@@ -101,6 +101,7 @@ export function LeftSidebar({ children }: { children: ReactNode }) {
 
   useMountSubscription(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (document.activeElement?.tagName === "IFRAME") return;
       const key = event.key.toLowerCase();
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
       if (key === "k") {
