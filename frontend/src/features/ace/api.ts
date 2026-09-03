@@ -127,6 +127,7 @@ export type IdeContextReport = {
     } | null;
     tabs: string[];
     lastSaved: string | null;
+    dirty: string[];
     scm: {
       branch: string | null;
       ahead: number;
@@ -145,3 +146,45 @@ export const rebuildAceGraph = (cwd: string) =>
 
 export const restartAce = () =>
   post<{ ok: boolean; health: AceHealth }>("/api/agent/ace/restart", {});
+
+// ─── M6: turn checkpoints + permission asks (the Changes strip) ───────────
+
+export type CheckpointsReport = {
+  sessionId: string;
+  repo: boolean;
+  checkpoints: { n: number; commit: string; ref: string }[];
+  /** Paths changed since the last checkpoint. */
+  changed: string[];
+};
+
+export type PendingPermission = {
+  requestId: string;
+  cwd: string;
+  sessionId: string;
+  toolName: string;
+  args: unknown;
+  reason: string;
+  createdAt: string;
+};
+
+export const loadCheckpoints = (cwd: string, sessionId: string) =>
+  call<CheckpointsReport>(`/api/agent/checkpoints?${new URLSearchParams({ cwd, sessionId })}`);
+
+export const revertCheckpoint = (cwd: string, sessionId: string, n: number) =>
+  post<{ ok: boolean }>("/api/agent/checkpoints/revert", { cwd, sessionId, n });
+
+export const showCheckpointFile = (
+  cwd: string,
+  sessionId: string,
+  n: number | null,
+  path: string,
+  mode: "open" | "diff",
+) => post<{ ok: boolean }>("/api/agent/checkpoints/show", { cwd, sessionId, n, path, mode });
+
+export const loadPendingPermissions = (cwd: string) =>
+  call<{ pending: PendingPermission[] }>(withCwd("/api/agent/permissions", cwd)).then(
+    (payload) => payload.pending,
+  );
+
+export const answerPermission = (requestId: string, decision: "allow" | "deny") =>
+  post<{ ok: boolean }>(`/api/agent/permissions/${encodeURIComponent(requestId)}`, { decision });

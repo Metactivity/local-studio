@@ -9,8 +9,9 @@
         "@hono/node-server": "^2.0.12",
         "@local-studio/harness": "workspace:*",
         "@lydell/node-pty": "1.2.0-beta.12",
-        "@metactivity/ace": "0.2.1",
-        "@metactivity/protocol": "0.2.1",
+        "@metactivity/ace": "0.3.0",
+        "@metactivity/protocol": "0.3.0",
+        "@metactivity/runtime": "0.3.0",
         "@modelcontextprotocol/sdk": "1.30.0",
         "chromium-bidi": "0.12.0",
         "effect": "4.0.0-beta.90",
@@ -118,9 +119,13 @@
 
     "@lydell/node-pty-win32-x64": ["@lydell/node-pty-win32-x64@1.2.0-beta.12", "", { "os": "win32", "cpu": "x64" }, "sha512-IDFa00g7qUDGUYgByrUBJtC+mOjYVt/8KYyWivCg5JjGOHbBUACUQZLl0jTWmnr+tld/UyTpX90a2PY6oTVtRw=="],
 
-    "@metactivity/ace": ["@metactivity/ace@0.2.1", "https://npm.pkg.github.com/download/@metactivity/ace/0.2.1/c35ea5f49112d423e9cf5f173f0c11b9336c453b", { "dependencies": { "@metactivity/protocol": "^0.2.1", "@modelcontextprotocol/sdk": "^1.30.0", "web-tree-sitter": "^0.25", "zod": "^4.4.3" } }, "sha512-UisnY9uDojzqucTpawLektSrqvflSe4jb/HmAdbDtv8A+Nmh4TTqXV1PaHpUasjRZ6Hx06LIe4n8wiMUo58AXg=="],
+    "@metactivity/ace": ["@metactivity/ace@0.3.0", "https://npm.pkg.github.com/download/@metactivity/ace/0.3.0/2a7e09ed91fb1303d0cda8d6dd638efb4d007c5f", { "dependencies": { "@metactivity/protocol": "^0.3.0", "@modelcontextprotocol/sdk": "^1.30.0", "web-tree-sitter": "^0.25", "zod": "^4.4.3" } }, "sha512-h7KQDuJT7VMjlpSLT/mzCG40+fX0AlryroUpFAhtkay96NQ2Saym0s6UsdrPgiO61oglv1qUYIcYscC4rO/ELg=="],
 
-    "@metactivity/protocol": ["@metactivity/protocol@0.2.1", "https://npm.pkg.github.com/download/@metactivity/protocol/0.2.1/00841394881665c06256d9e3011d310a67817f79", {}, "sha512-UQ+oMCxcCFibdwkkSeNY30d/LpXXS3gxoHmUZ8bFigWhKT0lvRSD8xhgiNBVozXLy9M3sxpcX88Gyqi1ysuPHQ=="],
+    "@metactivity/protocol": ["@metactivity/protocol@0.3.0", "https://npm.pkg.github.com/download/@metactivity/protocol/0.3.0/e33839822736b1608fe0ca8778bd32336f615729", {}, "sha512-pSiorCpFw4GGS4w6e4qftAvYojJaBXmu+6hECRjL6qu33+SXpzIxhUXm3v9saeDqWL17L7Ikdt9BVDfqrrifLw=="],
+
+    "@metactivity/runtime": ["@metactivity/runtime@0.3.0", "https://npm.pkg.github.com/download/@metactivity/runtime/0.3.0/c83deb840463315704d09285e9bb1a2e8aa86c89", { "dependencies": { "@metactivity/ace": "^0.3.0", "@metactivity/protocol": "^0.3.0", "@metactivity/sessions": "^0.3.0" } }, "sha512-KiocQVCHF9FOd3DRs2sHQIPYeKqvYPokQ1fPiA/ioNCg0Qqmj4fzJ/Z+6yr48HcYJNvaFwOS7fjKdMllhsYNGQ=="],
+
+    "@metactivity/sessions": ["@metactivity/sessions@0.3.0", "https://npm.pkg.github.com/download/@metactivity/sessions/0.3.0/64ecef7d4c4145f062afec0aad29969038572d17", { "dependencies": { "@metactivity/protocol": "^0.3.0" } }, "sha512-3dvZEqIWyluqlj39JUH1qQvb+z/QJiRS3L5VonDS6d2uDhWXxMl6q6BhG3qD0BAJSMnNuGZ7YN5rwi8oYGsy6w=="],
 
     "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.30.0", "", { "dependencies": { "@hono/node-server": "^1.19.9 || ^2.0.5", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "content-type": "^1.0.5", "cors": "^2.8.5", "cross-spawn": "^7.0.5", "eventsource": "^3.0.2", "eventsource-parser": "^3.0.0", "express": "^5.2.1", "express-rate-limit": "^8.2.1", "hono": "^4.11.4", "jose": "^6.1.3", "json-schema-typed": "^8.0.2", "pkce-challenge": "^5.0.0", "raw-body": "^3.0.0", "zod": "^3.25 || ^4.0", "zod-to-json-schema": "^3.25.1" }, "peerDependencies": { "@cfworker/json-schema": "^4.1.1" }, "optionalPeers": ["@cfworker/json-schema"] }, "sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA=="],
 

@@ -1,12 +1,13 @@
-// The IDE actions as harness tools (ADR-034 M5), read/navigate only: they
-// exist for a turn only while an IDE is connected for the session's folder.
-// The ACE gate classifies them as reads (not in its write set), so every
-// profile allows them.
+// The IDE actions as harness tools (ADR-034 M5 read/navigate, M6 writes):
+// they exist for a turn only while an IDE is connected for the session's
+// folder. The ACE gate reads the read ones under every profile; the write ones
+// (`IDE_WRITE_TOOLS` in ace-gate.ts) are blocked by Safe, asked under
+// Standard, allowed by Autonomous — and must target the session folder.
 
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { type Static, type TSchema, Type } from "@earendil-works/pi-ai";
-import type { IdeActionName, IdeActionParams } from "@metactivity/protocol";
+import { IDE_RUN_COMMAND_ALLOWLIST, type IdeActionName, type IdeActionParams } from "@metactivity/protocol";
 import { ideBridge, type IdeBridgeServer } from "../ide-bridge/server";
 import { asText, failure, type HarnessTool, textResult } from "./context";
 
@@ -30,6 +31,14 @@ const pathParam = Type.String({ description: "Workspace-relative or absolute fil
 /** The extension speaks URIs; the model speaks paths. */
 export function toUri(cwd: string, file: string): string {
   return pathToFileURL(path.isAbsolute(file) ? file : path.join(cwd, file)).toString();
+}
+
+/** Writes stay inside the session folder — a bridge action cannot reach past the workspace. */
+function insideUri(cwd: string, file: string): string {
+  const absolute = path.resolve(cwd, file);
+  const inside = path.relative(cwd, absolute);
+  if (inside === "" || inside.startsWith("..") || path.isAbsolute(inside)) throw new Error(`${file} is outside the workspace ${cwd}`);
+  return pathToFileURL(absolute).toString();
 }
 
 const TOOLS = [
@@ -119,6 +128,57 @@ const TOOLS = [
     parameters: Type.Object({ path: Type.Optional(pathParam) }),
     method: "ide.getDiagnostics",
     params: (p, cwd) => (p.path ? { uri: toUri(cwd, p.path) } : {}),
+  }),
+  // ─── M6 write actions ───
+  define({
+    name: "ide_apply_edit",
+    label: "IDE apply edit",
+    description:
+      "Replace a range of a file (the whole file when no range) through the editor, so an open unsaved buffer keeps the user's changes. A clean file is saved after the edit.",
+    parameters: Type.Object({ path: pathParam, text: Type.String({ description: "The replacement text" }), range: Type.Optional(range) }),
+    method: "ide.applyEdit",
+    params: (p, cwd) => ({ edits: [{ uri: insideUri(cwd, p.path), text: p.text, ...(p.range ? { range: p.range } : {}) }] }),
+  }),
+  define({
+    name: "ide_apply_patch",
+    label: "IDE apply patch",
+    description: "Apply a unified diff (git format, paths relative to the workspace) through the editor. Reports the files applied and the hunks that did not match.",
+    parameters: Type.Object({ unifiedDiff: Type.String() }),
+    method: "ide.applyPatch",
+    params: (p) => ({ unifiedDiff: p.unifiedDiff }),
+    timeoutMs: 30_000,
+  }),
+  define({
+    name: "ide_create_file",
+    label: "IDE create file",
+    description: "Create a new file in the workspace through the editor; fails when it already exists.",
+    parameters: Type.Object({ path: pathParam, content: Type.Optional(Type.String()) }),
+    method: "ide.fs.create",
+    params: (p, cwd) => ({ uri: insideUri(cwd, p.path), ...(p.content !== undefined ? { content: p.content } : {}) }),
+  }),
+  define({
+    name: "ide_rename",
+    label: "IDE rename",
+    description: "Rename or move a file or folder inside the workspace through the editor (open editors follow).",
+    parameters: Type.Object({ path: pathParam, newPath: pathParam }),
+    method: "ide.fs.rename",
+    params: (p, cwd) => ({ uri: insideUri(cwd, p.path), newUri: insideUri(cwd, p.newPath) }),
+  }),
+  define({
+    name: "ide_delete",
+    label: "IDE delete",
+    description: "Delete a file (or a folder with recursive=true) inside the workspace through the editor.",
+    parameters: Type.Object({ path: pathParam, recursive: Type.Optional(Type.Boolean()) }),
+    method: "ide.fs.delete",
+    params: (p, cwd) => ({ uri: insideUri(cwd, p.path), ...(p.recursive !== undefined ? { recursive: p.recursive } : {}) }),
+  }),
+  define({
+    name: "ide_run_command",
+    label: "IDE run command",
+    description: `Run one of these workbench commands: ${IDE_RUN_COMMAND_ALLOWLIST.join(", ")}. Anything else is refused.`,
+    parameters: Type.Object({ id: Type.String(), args: Type.Optional(Type.Array(Type.Unknown())) }),
+    method: "ide.runCommand",
+    params: (p) => ({ id: p.id, ...(p.args ? { args: p.args } : {}) }),
   }),
 ];
 

@@ -5,16 +5,16 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { createConnection, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { encodeFrame, type JsonRpcMessage, parseJsonRpc, rpcNotification, rpcRequest, rpcSuccess } from "@metactivity/protocol";
+import { rpcNotification, rpcRequest } from "@metactivity/protocol";
 import { resetAceService } from "../src/ace/ace-service";
 import { resetHarnessSessions } from "../src/harness-sessions";
 import { applyIdeEvent, emptyContext, IDE_CONTEXT_MAX_CHARS, ideContextBlock } from "../src/ide-bridge/context";
 import { IdeBridgeServer, resetIdeBridge, ideBridge } from "../src/ide-bridge/server";
 import { HarnessSession } from "../src/harness-runtime";
 import { ideTools } from "../src/tools/ide";
+import { FakeExtension, until } from "./support/fake-extension";
 import { startFakeLlamaServer } from "./support/fake-llama-server";
 
 let root: string;
@@ -39,71 +39,6 @@ afterAll(async () => {
   resetAceService();
   rmSync(root, { recursive: true, force: true });
 });
-
-/** The extension side, reduced to what the contract needs: a socket, frames in, frames out. */
-class FakeExtension {
-  readonly frames: JsonRpcMessage[] = [];
-  readonly handlers: Record<string, (params: unknown) => unknown> = {};
-  #socket: Socket | undefined;
-  #waiters: ((message: JsonRpcMessage) => void)[] = [];
-
-  connect(path: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const socket = createConnection(path, resolve);
-      this.#socket = socket;
-      socket.setEncoding("utf8");
-      socket.on("error", reject);
-      let buffer = "";
-      socket.on("data", (chunk: string) => {
-        buffer += chunk;
-        for (const line of buffer.split("\n").slice(0, -1)) {
-          const message = parseJsonRpc(line);
-          if (message === null) continue;
-          this.frames.push(message);
-          if ("method" in message && "id" in message) {
-            const handler = this.handlers[message.method];
-            if (handler) this.send(rpcSuccess(message.id, handler(message.params)));
-          }
-          for (const waiter of this.#waiters.splice(0)) waiter(message);
-        }
-        buffer = buffer.slice(buffer.lastIndexOf("\n") + 1);
-      });
-    });
-  }
-
-  send(message: JsonRpcMessage): void {
-    this.#socket?.write(encodeFrame(message));
-  }
-
-  next(predicate: (message: JsonRpcMessage) => boolean): Promise<JsonRpcMessage> {
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("no matching frame")), 2_000);
-      const waiter = (message: JsonRpcMessage) => {
-        if (!predicate(message)) return this.#waiters.push(waiter);
-        clearTimeout(timer);
-        resolve(message);
-      };
-      this.#waiters.push(waiter);
-    });
-  }
-
-  async hello(folder: string, id = 1) {
-    const ack = this.next((frame) => "id" in frame && frame.id === id);
-    this.send(rpcRequest(id, "ide.hello", { sessionId: "s1", folder, extensionVersion: "0.1.0", protocolVersion: 1 }));
-    return ack;
-  }
-
-  close(): void {
-    this.#socket?.destroy();
-  }
-}
-
-const until = (check: () => boolean, timeoutMs = 2_000) =>
-  new Promise<void>((resolve, reject) => {
-    const started = Date.now();
-    const tick = () => (check() ? resolve() : Date.now() - started > timeoutMs ? reject(new Error("condition not met")) : setTimeout(tick, 5));
-    tick();
-  });
 
 describe("IDE bridge server", () => {
   test("hello is acked and checked; events fold into the folder context; actions round-trip or time out", async () => {
