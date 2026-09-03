@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useProjects } from "@/features/agent/projects/context";
+import { IdeAgentPanel } from "@/features/ide/ide-agent-panel";
 import { useMountSubscription } from "@/hooks/use-mount-subscription";
 import { useAppStore } from "@/store";
-import { cx } from "@/ui/utils";
 
 const TUUM_SIGNALS = new Set(["tuum.ready", "tuum.focus"]);
 
@@ -30,7 +30,7 @@ export function IdePage({ ideOrigin }: { ideOrigin: string }) {
   }, [ideOrigin]);
 
   return (
-    <div className="grid h-full min-h-0 w-full grid-cols-[minmax(0,1fr)_clamp(380px,26vw,480px)] bg-(--agent-bg) text-(--fg)">
+    <div className="grid h-full min-h-0 w-full grid-cols-[minmax(0,1fr)_clamp(400px,26vw,480px)] bg-(--agent-bg) text-(--fg)">
       <div className="min-h-0 min-w-0">
         {loaded && folder ? (
           <iframe
@@ -47,22 +47,7 @@ export function IdePage({ ideOrigin }: { ideOrigin: string }) {
           </div>
         )}
       </div>
-      <aside className="flex min-h-0 flex-col border-l border-(--border)/60">
-        <header className="flex h-10 shrink-0 items-center justify-between border-b border-(--border)/60 px-3 text-[length:var(--fs-sm)]">
-          <span className="text-(--fg)/80">Agent panel — M4</span>
-          <span
-            className={cx(
-              "rounded-full px-2 py-0.5 text-[length:var(--fs-xs)]",
-              connected ? "bg-(--active) text-(--fg)" : "bg-(--surface-2)/40 text-(--dim)",
-            )}
-          >
-            {connected ? "IDE connected" : "IDE loading"}
-          </span>
-        </header>
-        <div className="flex flex-1 items-center justify-center px-6 text-center text-[length:var(--fs-sm)] text-(--dim)">
-          The agent composer and timeline land here once the owned harness drives them.
-        </div>
-      </aside>
+      <IdeAgentPanel connected={connected} />
     </div>
   );
 }
