@@ -1,7 +1,5 @@
 {
   "ignores": [
-    "@earendil-works/pi-coding-agent",
-    "typebox",
     "@hono/node-server",
     "@lydell/node-pty",
     "@modelcontextprotocol/sdk",

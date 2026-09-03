@@ -2,9 +2,7 @@
 // assert the result is complete and minimal, and re-assert inside the packaged
 // app (afterPack, called by electron-builder).
 
-import { spawnSync } from "node:child_process";
 import {
-  cpSync,
   existsSync,
   lstatSync,
   readFileSync,
@@ -14,12 +12,9 @@ import {
   rmSync,
   rmdirSync,
   statSync,
-  symlinkSync,
   unlinkSync,
 } from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { frontendDir, repoRoot, walkUnder } from "./lib.mjs";
 
 const standaloneBase = path.resolve(frontendDir, ".next", "standalone");
@@ -51,60 +46,14 @@ export function prepareNext() {
 }
 
 /**
- * Post-`next build` repair: copy the runtime dependencies Next's tracer cannot
- * see, re-point the traced Pi package aliases, and prune every traced file
- * that is a verified copy of a repo source — refusing to prune anything it
- * cannot verify, because deleting an unrecognized file silently would be worse
- * than failing the build.
+ * Post-`next build` repair: prune every traced file that is a verified copy of
+ * a repo source — refusing to prune anything it cannot verify, because deleting
+ * an unrecognized file silently would be worse than failing the build.
  */
 export function completeStandalone() {
   const standaloneRoots = [path.resolve(standaloneBase, "frontend"), standaloneBase];
   const standaloneRoot = standaloneRoots.find((root) => existsSync(path.resolve(root, "server.js")));
   if (!standaloneRoot) throw Error(`Missing standalone server under: ${standaloneBase}`);
-
-  const runtimeDependencyPaths = [
-    "node_modules/typebox",
-    "node_modules/@earendil-works/pi-coding-agent",
-  ];
-  for (const dependencyPath of runtimeDependencyPaths) {
-    const source = path.resolve(frontendDir, dependencyPath);
-    if (!existsSync(source)) throw Error(`Missing runtime dependency source: ${dependencyPath}`);
-    const destination = path.resolve(standaloneRoot, dependencyPath);
-    cpSync(source, destination, { recursive: true });
-    const executableShimDirectories = readdirSync(destination, {
-      recursive: true,
-      withFileTypes: true,
-    })
-      .filter((entry) => entry.isDirectory() && entry.name === ".bin")
-      .map((entry) => path.resolve(entry.parentPath, entry.name));
-    for (const directory of executableShimDirectories) {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  }
-
-  const tracedPiPackageDirectory = path.resolve(standaloneRoot, ".next/node_modules/@earendil-works");
-  if (existsSync(tracedPiPackageDirectory)) {
-    const packageTargets = new Map([
-      [
-        "pi-ai-",
-        path.resolve(
-          standaloneRoot,
-          "node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai",
-        ),
-      ],
-      ["pi-coding-agent-", path.resolve(standaloneRoot, "node_modules/@earendil-works/pi-coding-agent")],
-    ]);
-    for (const entry of readdirSync(tracedPiPackageDirectory)) {
-      const target = [...packageTargets].find(([prefix]) => entry.startsWith(prefix))?.[1];
-      if (!target) continue;
-      const link = path.resolve(tracedPiPackageDirectory, entry);
-      if (!lstatSync(link).isSymbolicLink()) {
-        throw Error(`Expected traced Pi package alias to be a symlink: ${link}`);
-      }
-      unlinkSync(link);
-      symlinkSync(path.relative(path.dirname(link), target), link, "dir");
-    }
-  }
 
   const isVerifiedCopy = (file, repoRelativePath) => {
     const source = path.resolve(repoRoot, repoRelativePath);
@@ -141,9 +90,7 @@ export function completeStandalone() {
     if (directory !== standaloneBase && readdirSync(directory).length === 0) rmdirSync(directory);
   };
   removeEmptyDirectories(standaloneBase);
-  console.log(
-    `  standalone repaired: +${runtimeDependencyPaths.length} runtime dependency trees, -${pruned} traced non-runtime files`,
-  );
+  console.log(`  standalone repaired: -${pruned} traced non-runtime files`);
 }
 
 /** Verify the standalone tree is complete, self-contained, and minimal. */
@@ -153,21 +100,8 @@ export function assertStandalone() {
     path.resolve(standaloneBase, "server.js"),
   ];
   const runtimeRoots = [path.resolve(standaloneBase, "frontend"), standaloneBase];
-  const requiredRuntimeFiles = [
-    "node_modules/@earendil-works/pi-coding-agent/package.json",
-    "node_modules/@earendil-works/pi-coding-agent/dist/index.js",
-    "node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/package.json",
-    "node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/providers/data/amazon-bedrock.json",
-    "node_modules/@earendil-works/pi-coding-agent/node_modules/typebox/build/value/shared/union_priority_sort.mjs",
-  ];
-
   if (!candidates.some((candidate) => existsSync(candidate))) {
     throw Error(`Missing standalone server: ${candidates.join(", ")}`);
-  }
-  for (const file of requiredRuntimeFiles) {
-    if (!runtimeRoots.some((root) => existsSync(path.resolve(root, file)))) {
-      throw Error(`Missing standalone runtime dependency: ${file}`);
-    }
   }
 
   const runtimeRoot = runtimeRoots.find((root) => existsSync(path.resolve(root, "server.js")));
@@ -197,67 +131,6 @@ export function assertStandalone() {
       : [];
   if (danglingTracedPackages.length > 0) {
     throw Error(`Dangling traced runtime packages: ${danglingTracedPackages.join(", ")}`);
-  }
-
-  const piCodingAgentRoot = runtimeRoot
-    ? path.resolve(runtimeRoot, "node_modules/@earendil-works/pi-coding-agent")
-    : null;
-  const piAiRoot = piCodingAgentRoot
-    ? path.resolve(piCodingAgentRoot, "node_modules/@earendil-works/pi-ai")
-    : null;
-  const piRuntimeEntries =
-    piCodingAgentRoot && piAiRoot
-      ? [path.resolve(piCodingAgentRoot, "dist/index.js"), path.resolve(piAiRoot, "dist/index.js")]
-      : [];
-  if (piRuntimeEntries.length !== 2 || piRuntimeEntries.some((entry) => !existsSync(entry))) {
-    throw Error("Missing packaged Pi runtime entrypoints");
-  }
-  for (const entry of piRuntimeEntries) {
-    const importCheck = spawnSync(
-      process.execPath,
-      ["--input-type=module", "--eval", `import(${JSON.stringify(pathToFileURL(entry).href)})`],
-      { cwd: runtimeRoot, encoding: "utf8" },
-    );
-    if (importCheck.status !== 0) {
-      throw Error(
-        `Standalone Pi runtime entrypoint is not importable: ${importCheck.stderr || importCheck.stdout}`,
-      );
-    }
-  }
-
-  // Locate each dependency's package directory the way Node's resolver walks
-  // node_modules, without resolving an entry point: require.resolve() fails on
-  // ESM-only packages (pi-telemetry ships exports with no CJS condition) even
-  // when the package sits exactly where it belongs. The escape check only
-  // needs the directory.
-  const piAiManifestPath = path.resolve(realpathSync(piAiRoot), "package.json");
-  const piAiManifest = JSON.parse(readFileSync(piAiManifestPath, "utf8"));
-  createRequire(piAiManifestPath);
-  for (const dependency of Object.keys(piAiManifest.dependencies ?? {})) {
-    let searchRoot = realpathSync(piAiRoot);
-    let packageDirectory = null;
-    while (searchRoot) {
-      const candidate = path.resolve(searchRoot, "node_modules", dependency);
-      if (existsSync(path.resolve(candidate, "package.json"))) {
-        packageDirectory = candidate;
-        break;
-      }
-      const parent = path.resolve(searchRoot, "..");
-      if (parent === searchRoot) break;
-      searchRoot = parent;
-    }
-    if (!packageDirectory) {
-      throw Error(`Pi AI dependency missing from standalone runtime: ${dependency}`);
-    }
-    const resolvedDependency = realpathSync(packageDirectory);
-    const runtimeRelativePath = path.relative(runtimeRoot, resolvedDependency);
-    if (
-      runtimeRelativePath === ".." ||
-      runtimeRelativePath.startsWith(`..${path.sep}`) ||
-      path.isAbsolute(runtimeRelativePath)
-    ) {
-      throw Error(`Pi AI dependency escaped standalone runtime: ${dependency}`);
-    }
   }
 
   const unexpected = filesUnder(standaloneBase).filter((file) => !isRuntimeFile(file));
@@ -310,37 +183,6 @@ export async function afterPack(context) {
     );
   }
 
-  const packagedRoot = path.dirname(standaloneServer);
-  const missingRuntimeFile = [
-    path.join(packagedRoot, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js"),
-    path.join(
-      packagedRoot,
-      "node_modules",
-      "@earendil-works",
-      "pi-coding-agent",
-      "node_modules",
-      "@earendil-works",
-      "pi-ai",
-      "package.json",
-    ),
-    path.join(
-      packagedRoot,
-      "node_modules",
-      "@earendil-works",
-      "pi-coding-agent",
-      "node_modules",
-      "@earendil-works",
-      "pi-ai",
-      "dist",
-      "providers",
-      "data",
-      "amazon-bedrock.json",
-    ),
-  ].find((file) => !existsSync(file));
-  if (missingRuntimeFile) {
-    throw Error(`Packaged app is missing a Pi runtime dependency: ${missingRuntimeFile}`);
-  }
-
   const agentRuntimeRoot = path.join(resourcesDir, "app", "agent-runtime");
   const agentRuntime = path.join(agentRuntimeRoot, "standalone.mjs");
   const missingAgentRuntimeFile = [
@@ -390,26 +232,10 @@ export async function afterPack(context) {
       `${productFilename} Helper`,
     );
     if (!existsSync(helperExecutable)) {
-      throw Error(`Packaged app is missing its Pi helper executable: ${helperExecutable}`);
+      throw Error(`Packaged app is missing its helper executable: ${helperExecutable}`);
     }
   }
 
-  const packagedPiCli = path.join(
-    resourcesDir,
-    "app",
-    "frontend",
-    ".next",
-    "standalone",
-    "frontend",
-    "node_modules",
-    "@earendil-works",
-    "pi-coding-agent",
-    "dist",
-    "cli.js",
-  );
-  if (!existsSync(packagedPiCli)) {
-    throw Error(`Packaged app is missing its Pi CLI: ${packagedPiCli}`);
-  }
   console.log(
     `  afterPack: embedded frontend and agent runtime present, app.asar ${appArchiveBytes} bytes (${electronPlatformName})`,
   );

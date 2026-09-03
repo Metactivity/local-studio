@@ -11,11 +11,6 @@ const config = {
     "desktop/interfaces.ts": ["types"],
   },
   ignoreDependencies: [
-    // Not imported by frontend code since the pi extensions left: kept because
-    // desktop/automation/standalone.mjs copies and asserts them in the packaged
-    // standalone and the bootstrap route reports the SDK version.
-    "@earendil-works/pi-coding-agent",
-    "typebox",
     "tailwindcss",
     "postcss",
     "@local-studio/contracts",

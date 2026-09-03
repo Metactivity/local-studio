@@ -36,7 +36,28 @@ no dependencies of its own, and it is already installed transitively by
 
 ### `src/`
 
-None. Byte-identical to upstream.
+`src/harness/**`, `src/*.ts` and `src/harness/tools/{read,write,edit,edit-diff,bash,image,path-utils,file-mutation-queue,tool-context,index}.ts`
+are byte-identical to upstream, except `src/harness/tools/index.ts`, which additionally exports the three tools
+below.
+
+### Additions from `@earendil-works/pi-coding-agent` (same repository, `packages/coding-agent/src`, same commit, MIT)
+
+Vendored on 2026-09-03 when the runtime dropped its dependency on the pi-coding-agent SDK (MET-914 W3b). Files
+under `src/providers/core/` and `src/providers/utils/{abort,json,text,management-http,pi-user-agent}.ts` are verbatim
+copies; the rest are adaptations, each with a header note:
+
+| File | Upstream | Change |
+|---|---|---|
+| `src/harness/tools/grep.ts`, `find.ts`, `ls.ts` | `core/tools/{grep,find,ls}.ts` | On the harness tool contract (`ExecutionToolContext`): TUI renderers, `wrapToolDefinition`, pluggable `*Operations` removed; paths through the execution env; binaries from PATH (`binaries.ts`, local) instead of `utils/tools-manager.ts` downloads. Names, schemas, output unchanged. |
+| `src/providers/core/{model-runtime,auth-storage,resolve-config-value,model-config,models-store,provider-composer,remote-catalog-provider,runtime-credentials}.ts` | `core/*` | Verbatim. |
+| `src/providers/config.ts` | `config.ts` | Local shim: only `getAgentDir()` and `VERSION`, the two symbols the modules above import. |
+| `src/providers/utils/paths.ts` | `utils/paths.ts` | `markPathIgnoredByCloudSync` (and its `cross-spawn` dependency) dropped. |
+| `src/providers/utils/shell.ts` | `utils/shell.ts` | Only `getShellConfig` kept (what `resolve-config-value` needs). |
+| `src/providers/index.ts` | — | Local: the `@local-studio/harness/providers` entry (`ModelRuntime`, `AuthStorage`). |
+
+Not vendored from pi-coding-agent: `model-registry.ts` (extension-facing facade), `auth-guidance.ts` (CLI help text),
+`utils/child-process.ts` (only needed by the dropped helper). `proper-lockfile` was added to `package.json` for
+`auth-storage.ts`.
 
 ### `test/` (ported from vitest to `bun:test`)
 
