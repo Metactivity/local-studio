@@ -85,6 +85,14 @@ export function bundleAgentRuntime() {
     cpSync(source, destination, { recursive: true });
   }
 
+  // The bundled Emscripten glue of web-tree-sitter looks for its runtime wasm
+  // beside the bundle (the grammars come from @metactivity/ace's own wasm/
+  // directory, resolved at runtime); without it the first ACE parse aborts the
+  // whole process.
+  const treeSitterWasm = path.join(packageDir, "node_modules", "web-tree-sitter", "tree-sitter.wasm");
+  if (!existsSync(treeSitterWasm)) throw Error(`Missing web-tree-sitter/tree-sitter.wasm under ${packageDir}`);
+  cpSync(treeSitterWasm, path.join(distDir, "tree-sitter.wasm"));
+
   const bundle = readFileSync(bundlePath, "utf8");
   const sourceRoot = realpathSync(repoRoot);
   if (bundle.includes(sourceRoot)) {
