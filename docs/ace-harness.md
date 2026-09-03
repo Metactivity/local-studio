@@ -62,9 +62,43 @@ paging on entry `seq`. Session data lives under `ACE_STORE_ROOT`; the pi JSONL s
 same code runs under bun (dev, tests) and node (the packaged `standalone.mjs`); the harness modules are imported lazily
 behind the flag because `@metactivity/ace` ships TypeScript sources that node loads only from the bundle.
 
-Not on this core yet: pi extensions (browser, connectors, github, obsidian, subagents, automations tools), composer
-skills / prompt templates, extension UI prompts (`respondExtensionUi` returns false), goal-driver continuation runs on
-it unchanged. `findSessionFile` / `lastAssistantResult` (automations, subagent results) still read the pi JSONL.
+Not on this core yet: composer prompt templates, extension UI prompts (`respondExtensionUi` returns false); the
+goal-driver continuation runs on it unchanged. `findSessionFile` (automations run summaries) still reads the pi JSONL;
+`lastAssistantResult` (subagent reports) reads `sessions.db` under the flag.
+
+### Built-in tools (W4, MET-915)
+
+The nine bundled pi extensions run on this core as in-process tools (`src/tools/`, one module per former extension,
+`builtinTools(ctx)` assembles them). Names, labels, descriptions and parameter schemas are byte-identical to the pi
+versions — the skills under `frontend/desktop/resources/skills/*` and the model prompts name them — so a session
+sees the same inventory on either core. Gates are the pi driver's (`buildAgentSessionOptionsSync().toolGates`, same
+predicates as `runtimeExtensionPaths`); per-session values arrive on `ToolContext.env` (the same `runtimeEnvInjections`
+pi exported to its extensions) instead of `process.env`.
+
+| Module | Tools | Gate | Transport / env |
+|---|---|---|---|
+| `automations` | `list_automations` `read_automation` `schedule_automation` `update_automation` `set_automation_status` `run_automation_now` `delete_automation` | always | `/api/agent/automations…` in process; `LOCAL_STUDIO_CWD`, session model id for defaults |
+| `subagents` | `subagent` `subagent_list` `subagent_status` `subagent_stop` | always | `/api/agent/subagents…` in process, scoped to the harness session id; a child is a second `HarnessSession` under `subagent:<parent>:<run>` (`src/subagents.ts`) |
+| `cua` | `browser_navigate` `browser_get_url` `browser_get_text` `browser_get_html` `browser_screenshot` `browser_click` `browser_fill` `browser_scroll` `browser_back` `browser_forward` `browser_reload` `browser_history` | Browser tool on | `/api/agent/browser/:verb` in process; `LOCAL_STUDIO_BROWSER_SESSION_ID`, `LOCAL_STUDIO_BROWSER_TOOL_TIMEOUT_MS` |
+| `chrome` | `chrome_navigate` `chrome_get_url` `chrome_get_text` `chrome_get_html` `chrome_screenshot` `chrome_click` `chrome_fill` `chrome_scroll` `chrome_eval` `chrome_tabs_list` `chrome_tabs_new` `chrome_tabs_switch` `chrome_tabs_close` `chrome_history` | Browser on + backend `chrome` + relay answers a 3 s `relay.capabilities` probe (only advertised methods) | JSON-RPC to the relay; `LOCAL_STUDIO_CHROME_RELAY_URL` / `_TOKEN` / `_SESSION`, `LOCAL_STUDIO_CHROME_TOOL_TIMEOUT_MS` (W10 renames) |
+| `github` | `github_status` `github_search` `github_issue_list` `github_issue_view` `github_pr_list` `github_pr_view` `github_pr_diff` `github_pr_checks` `github_run_list` `github_run_view` `github_api` `github_cli` | `gh` binary found | `execFile` argv, no shell; `LOCAL_STUDIO_GH_PATH`, `LOCAL_STUDIO_CWD` |
+| `obsidian` | `obsidian_vaults` `obsidian_search` `obsidian_read` `obsidian_recent` `obsidian_backlinks` `obsidian_create` `obsidian_append` | Obsidian registered a vault | filesystem; `LOCAL_STUDIO_OBSIDIAN_VAULTS` (fallback `LOCAL_STUDIO_OBSIDIAN_CONFIG` / obsidian.json) |
+| `connectors` | `<connector_id>_<tool>` per granted MCP tool | ≥ 1 connector enabled | `/api/agent/connectors/call` in process, `model_id` = session model |
+
+The in-process transport is `ToolContext.request` → the runtime's own Hono app (`app.request`, lazily created singleton);
+the pi extensions reached the same handlers through the frontend proxy (`proxyToAgentRuntime`, verbatim), so replies
+and error texts are unchanged and the ~5-minute response-header timeout no longer applies.
+
+**Policies** (`src/tools/policies.ts`): `local-studio-agent-policy` → `withAgentPolicy` appends the artifact policy
+text to the system prompt once; `local-studio-timeouts` → `withTimeoutPolicy` gives the vendored `bash` tool the
+default `timeout` (`LOCAL_STUDIO_BASH_TIMEOUT_SECONDS`, 120) and cap (`LOCAL_STUDIO_BASH_MAX_TIMEOUT_SECONDS`, 900).
+Neither touches ACE's gate. **Skills**: the composer's selected skills plus the gated bundled skill directories
+(`buildAgentSessionOptionsSync().skills`, discovered by `skill-discovery.ts`) load through the vendored `loadSkills`
+and are advertised with `formatSkillsForSystemPrompt`. System prompt order: base (+ vision guidance) → skills → policy.
+`toolAccess: "read_only"` still keeps `read` and `ace_retrieve_context` only.
+
+The pi driver is still the default core, so `frontend/desktop/resources/pi-extensions/` and `runtimeExtensionPaths()`
+stay until the flip; the two implementations are held byte-identical on the tool surface until then.
 
 ### Wire compatibility
 

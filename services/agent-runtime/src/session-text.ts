@@ -1,4 +1,8 @@
 import { openSync, readSync, closeSync, statSync } from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { agentCore } from "./agent-core";
+import { harnessStoreRoot } from "./data-dir";
 import { findSessionFile } from "./sessions-store";
 import { isRecord } from "../../../shared/agent/guards";
 
@@ -63,7 +67,29 @@ export function lastAssistantResultFromJsonl(raw: string): LastAssistantResult {
   return { text, error };
 }
 
+/** The harness core's transcript is `sessions.db`: the session's mutations, oldest
+ *  first, each wrapping one entry in the vocabulary pi writes — so the JSONL
+ *  reader applies unchanged once the entries are laid out one per line. */
+function harnessTranscript(sessionId: string): string | null {
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(path.join(harnessStoreRoot(), "sessions.db"), { readOnly: true });
+    const rows = db
+      .prepare("SELECT json FROM mutations WHERE session_id = ? ORDER BY seq")
+      .all(sessionId) as Array<{ json: string }>;
+    return rows.map((row) => JSON.stringify((JSON.parse(row.json) as { entry?: unknown }).entry ?? null)).join("\n");
+  } catch {
+    return null;
+  } finally {
+    db?.close();
+  }
+}
+
 export function lastAssistantResult(cwd: string, piSessionId: string): LastAssistantResult {
+  if (agentCore() === "harness") {
+    const transcript = harnessTranscript(piSessionId);
+    return transcript === null ? { text: "", error: null } : lastAssistantResultFromJsonl(transcript);
+  }
   const filepath = findSessionFile(cwd, piSessionId);
   if (!filepath) return { text: "", error: null };
   try {

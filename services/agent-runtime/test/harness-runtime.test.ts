@@ -87,6 +87,44 @@ describe("HarnessSession", () => {
     }
   }, 30_000);
 
+  test("built-in tools, skills and the artifact policy reach the wire; tools run in process", async () => {
+    const skillDir = join(root, "skills", "demo-skill");
+    Bun.spawnSync(["mkdir", "-p", skillDir]);
+    await Bun.write(join(skillDir, "SKILL.md"), "---\nname: demo-skill\ndescription: Demo skill for the harness test.\n---\nUse it wisely.\n");
+    const server = startFakeLlamaServer([
+      { toolCall: { name: "list_automations", args: {} } },
+      { toolCall: { name: "subagent_list", args: {} } },
+      { text: "Nothing scheduled, no children." },
+    ]);
+    const session = driver(server);
+    try {
+      await session.ensureStarted("fake-qwen3.8", cwd, null, { thinkingLevel: "low", skills: [{ name: "demo-skill", path: skillDir }] });
+      await session.prompt("What is scheduled?", () => undefined);
+
+      const request = server.seen.find((seen) => seen.path === "/v1/chat/completions")!.body!;
+      const system = (request.messages as Array<{ role: string; content: string }>)[0]!;
+      expect(system.role).toBe("system");
+      expect(system.content).toContain("Local Studio artifact policy:");
+      expect(system.content).toContain("<available_skills>");
+      expect(system.content).toContain("<name>demo-skill</name>");
+      const advertised = (request.tools as Array<{ function: { name: string } }>).map((tool) => tool.function.name);
+      expect(advertised).toEqual(expect.arrayContaining(["bash", "list_automations", "subagent", "delete_automation"]));
+      expect(advertised.some((name) => name.startsWith("browser_"))).toBe(false);
+
+      const results = session
+        .getEventsAfter(0)
+        .map((logged) => logged.event as { type: string; toolName?: string; result?: { content: Array<{ text?: string }> }; isError?: boolean })
+        .filter((event) => event.type === "tool_execution_end");
+      expect(results.map((event) => [event.toolName, event.isError, event.result?.content[0]?.text])).toEqual([
+        ["list_automations", false, "No automations are scheduled. Use schedule_automation to create one."],
+        ["subagent_list", false, "This session has not spawned any subagents."],
+      ]);
+    } finally {
+      await session.stop();
+      server.stop();
+    }
+  }, 30_000);
+
   test("steer and follow-up queue while a turn runs and are handed back on abort", async () => {
     const slow: ScriptedReply[] = [{ toolCall: { name: "bash", args: { command: "sleep 5" } } }, { text: "Never reached." }];
     const server = startFakeLlamaServer(slow);
