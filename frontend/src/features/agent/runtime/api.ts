@@ -5,6 +5,7 @@ import {
   type SessionGoalPatch,
 } from "@shared/agent/session-goal";
 import { safeJson } from "@/features/agent/safe-json";
+import { workspaceIdentityHeaders } from "@shared/agent/workspace-identity";
 import {
   parseAgentTurnCommandResult,
   type AgentTurnCommandResult,
@@ -234,7 +235,7 @@ export function compactSession(args: CompactSessionArgs): Promise<CompactSession
     Effect.gen(function* () {
       const response = yield* fetchEffect("/api/agent/compact", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...workspaceIdentityHeaders(args) },
         body: JSON.stringify(args),
       });
       const payload = yield* safeJsonEffect<{
@@ -272,7 +273,7 @@ export function submitTurnCommand(args: SubmitTurnArgs): Promise<AgentTurnComman
     Effect.gen(function* () {
       const response = yield* fetchEffect("/api/agent/turn", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...workspaceIdentityHeaders(args) },
         body: JSON.stringify(args),
       });
       const payload = yield* safeJsonEffect<{ error?: string } & Partial<AgentTurnCommandResult>>(

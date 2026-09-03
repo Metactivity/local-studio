@@ -164,6 +164,16 @@ those shapes, so the driver forwards them as is and synthesizes the ones the pi-
 Replay (`GET /api/agent/sessions/:id`) is the same vocabulary pi writes: `session` header, `message` entries,
 `compaction` entries (`summary`), `model_change`.
 
+## Workspace identity
+
+One identity per call (ADR-034 §2.5, MET-927): the Local Studio project folder is the `?folder=` of the IDE iframe, the
+harness `cwd`, the ACE project hash and, from M5, the bridge session key. It reaches the runtime as `X-Tuum-Session` /
+`X-Tuum-Folder` (`shared/agent/workspace-identity.ts`; the folder is percent-encoded) — set by the frontend on `turn` and
+`compact`, filled in by the Next proxy from `?sessionId=` / `?cwd=` on the query-addressed routes — and falls back to the
+body/query fields. `sessionIdentity()` is the single resolver; `ensureStarted` then runs `resolveAgentCwdEffect`
+(realpath + `WORKSPACE_ROOTS`) on the result. `tuum-server` no longer needs `--default-folder` since the iframe always
+passes `?folder=` — dropping the flag from the Spark unit is an M10 item (`docs/ide/architecture-tuum-web.md` §6).
+
 ## Environment
 
 | Variable | Default | Role |
