@@ -323,7 +323,9 @@ function reduceToolResultMessageEvent(
           id: toolCallId,
           name: (typeof msg.toolName === "string" && msg.toolName) || "tool",
           status: isError ? "error" : "done",
-          ...(asRecord(msg.details) ? { details: asRecord(msg.details) as Record<string, unknown> } : {}),
+          ...(asRecord(msg.details)
+            ? { details: asRecord(msg.details) as Record<string, unknown> }
+            : {}),
           text: resultText,
         }),
       ),
@@ -445,7 +447,15 @@ function reduceAssistantSnapshotEvent(
       if (callErrored) blocks = finalizeRunningToolBlocks(blocks, "error");
       else if (callAborted) blocks = finalizeRunningToolBlocks(blocks, "done");
       if (failureText) blocks = appendFailureBlock(blocks, failureText);
-      return { ...current, streamCalls, blocks, text: messageTextFromBlocks(blocks) };
+      const model =
+        type === "message_end" && typeof message.model === "string" ? message.model : current.model;
+      return {
+        ...current,
+        streamCalls,
+        blocks,
+        text: messageTextFromBlocks(blocks),
+        ...(model ? { model } : {}),
+      };
     },
     ctx.replay,
   );
@@ -759,6 +769,7 @@ function reduceFinalAssistantMessageEvent(
         ...current,
         text,
         blocks,
+        ...(typeof msg.model === "string" ? { model: msg.model } : {}),
       }),
       ctx.replay,
     );

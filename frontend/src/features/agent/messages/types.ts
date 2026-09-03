@@ -78,6 +78,9 @@ export type ChatMessage = {
   // at agent_settled. Transient UI state, never persisted.
   awaitingEcho?: boolean;
   timestamp?: string;
+  // The served model id pi stamped on the settled assistant message — the
+  // provenance line under a turn, with `timestamp`.
+  model?: string;
 };
 
 export type TokenStats = {

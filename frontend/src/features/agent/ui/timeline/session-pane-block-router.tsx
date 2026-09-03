@@ -128,13 +128,21 @@ function SessionPaneBlockRouterInner({
   }
 
   return (
-    <AssistantBlocks
-      blocks={message.blocks ?? EMPTY_BLOCKS}
-      live={live}
-      running={running}
-      cwd={cwd}
-      onForkSession={onForkSession}
-    />
+    <>
+      <AssistantBlocks
+        blocks={message.blocks ?? EMPTY_BLOCKS}
+        live={live}
+        running={running}
+        cwd={cwd}
+        onForkSession={onForkSession}
+      />
+      {!live && message.model ? (
+        <p className="mt-1 font-mono text-[length:var(--fs-xs)] text-(--fg)/40">
+          {message.model}
+          {message.timestamp ? ` · ${message.timestamp}` : ""}
+        </p>
+      ) : null}
+    </>
   );
 }
 
