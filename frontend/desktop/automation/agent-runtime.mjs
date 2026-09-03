@@ -40,7 +40,6 @@ export function bundleAgentRuntime() {
     "chromium-bidi",
     "mitt",
     "devtools-protocol",
-    "@lydell/node-pty",
     "typebox",
     "@earendil-works/pi-ai",
   ];
@@ -65,13 +64,6 @@ export function bundleAgentRuntime() {
   );
   if (build.status !== 0) {
     throw Error(`Agent runtime bundle failed with status ${build.status ?? "unknown"}`);
-  }
-
-  const lydellDir = path.join(packageDir, "node_modules", "@lydell");
-  if (existsSync(lydellDir)) {
-    for (const entry of readdirSync(lydellDir)) {
-      if (entry.startsWith("node-pty-")) runtimePackages.push(`@lydell/${entry}`);
-    }
   }
 
   for (const packageName of runtimePackages) {

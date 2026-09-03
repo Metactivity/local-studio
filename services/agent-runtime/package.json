@@ -19,7 +19,6 @@
     "@earendil-works/pi-ai": "0.84.3",
     "@hono/node-server": "^2.0.12",
     "@local-studio/harness": "workspace:*",
-    "@lydell/node-pty": "1.2.0-beta.12",
     "@metactivity/ace": "0.4.0",
     "@metactivity/protocol": "0.4.0",
     "@metactivity/runtime": "0.4.0",

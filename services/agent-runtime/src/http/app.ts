@@ -46,13 +46,6 @@ import {
   handleSubagentStop,
 } from "./subagent-handlers";
 import { handlePrGet, handlePrMerge } from "./pr-handlers";
-import {
-  handlePtyClose,
-  handlePtyInput,
-  handlePtyOpen,
-  handlePtyResize,
-  handlePtyStream,
-} from "./pty-handlers";
 import { handleAgentModels } from "./model-handlers";
 import {
   handleAceLens,
@@ -256,11 +249,6 @@ export function createAgentRuntimeApp() {
   app.post("/api/agent/providers/:providerId/logout", (c) =>
     handleProviderLogout(c.req.param("providerId")),
   );
-  app.post("/api/agent/terminal/pty/open", (c) => handlePtyOpen(c.req.raw));
-  app.get("/api/agent/terminal/pty/stream", (c) => handlePtyStream(c.req.raw));
-  app.post("/api/agent/terminal/pty/input", (c) => handlePtyInput(c.req.raw));
-  app.post("/api/agent/terminal/pty/resize", (c) => handlePtyResize(c.req.raw));
-  app.post("/api/agent/terminal/pty/close", (c) => handlePtyClose(c.req.raw));
   app.get("/api/agent/browser/fetch", (c) => handleBrowserFetch(c.req.raw));
   app.get("/api/agent/browser/frame", () => handleBrowserFrame());
   app.post("/api/agent/browser/input", (c) => handleBrowserInput(c.req.raw));
