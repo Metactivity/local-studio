@@ -3,8 +3,9 @@
 ADR-033 §2.4 in code: ACE (`@metactivity/ace`) is the context builder, the gate, the tool-result
 compaction and the run-end evaluation of the vendored pi-agent-core loop. Code: `services/agent-runtime/src/ace/`
 and `src/harness/spark-model.ts`. It is the runtime's only agent core (MET-914 W3b): the pi-coding-agent SDK driver,
-its JSONL session store and the bundled pi extensions are gone; `LOCAL_STUDIO_AGENT_CORE` is accepted for one more
-release and any value other than `harness` logs a deprecation warning (`src/agent-core.ts`).
+its JSONL session store and the bundled pi extensions are gone and `@earendil-works/pi-coding-agent` is no longer a
+dependency (the pieces still wanted were vendored — see "pi-coding-agent audit" below); `LOCAL_STUDIO_AGENT_CORE` is
+accepted for one more release and any value other than `harness` logs a deprecation warning (`src/agent-core.ts`).
 
 ## Architecture
 
@@ -75,13 +76,41 @@ the automation target lookup asks the store (`hasSession`). Decisions taken at t
   tool asks the user anything mid-turn, so the session contract lost `respondExtensionUi` and the runtime never emits
   `extension_ui_request`. `POST /api/agent/runtime/extension-ui` stays and answers 204 so an older client's reply is a
   no-op; the frontend dialog code is untouched and simply never triggers.
-- **`toolAccess: "read_only"`** keeps `read` and `ace_retrieve_context`. The pi driver also kept `grep` / `find` / `ls`,
-  which the vendored tool set does not have (`read` / `write` / `edit` / `bash` only); `bash` is excluded, `read` is the
-  read-only surface.
+- **Core tools** are pi's seven: `read` / `write` / `edit` / `bash` from agent-core plus `grep` / `find` / `ls` vendored
+  from pi-coding-agent onto the harness tool contract (`packages/harness/src/harness/tools/{grep,find,ls}.ts`, same
+  names, schemas and output). `grep` needs `rg` and `find` needs `fd` on PATH (`PI_RG_PATH` / `PI_FD_PATH` override);
+  pi downloaded a missing binary at first use, this runtime reports an install hint instead.
+  **`toolAccess: "read_only"`** is pi's set — `read` / `grep` / `find` / `ls` — plus `ace_retrieve_context`.
+- **System prompt** gains what pi's resource loader added: the project context files (`src/harness/context-files.ts`:
+  `<agentDir>/AGENTS.md` first, then one `AGENTS.override.md` / `AGENTS.md` / `CLAUDE.md` per ancestor directory from
+  the root down to cwd, in pi's `<project_context>` block) and the `Current working directory:` line. Order: base →
+  vision guidance → project context → skills → cwd → artifact policy → per-turn goal. pi's linked-worktree dedupe rule
+  and its pi-documentation section were not ported.
 - **User plugins** (`<agentDir>/extensions`, the Plugins tab) were pi extensions and do not load on this core; the tab
   still lists them and the nine built-in tool modules (`src/builtin-plugins.ts`).
-- **Cloud provider sign-in** (`src/provider-hub.ts`) still runs on pi's `ModelRuntime`, so `@earendil-works/pi-coding-agent`
-  stays a runtime dependency for that one import; a provider model is not routable by `resolveHarnessEndpoint` yet.
+- **Cloud provider sign-in** (`src/provider-hub.ts`) runs on the vendored `ModelRuntime`
+  (`@local-studio/harness/providers`, same `auth.json` / `models.json` under `~/.pi/agent`); every
+  `/api/agent/providers/*` endpoint is unchanged (`test/provider-hub.test.ts` drives the login-job state machine over a
+  fake runtime). A provider model is listed in the picker but not routable by `resolveHarnessEndpoint` yet.
+
+### pi-coding-agent audit (what the runtime kept when the dependency left)
+
+| Module (`dist/core`) | Outcome | Reason |
+|---|---|---|
+| `tools/grep`, `tools/find`, `tools/ls` | vendored → `packages/harness/src/harness/tools/` | agent-core ships read/write/edit/bash/image only; the model lost grep/find/ls and had to shell out |
+| `tools/truncate`, `tools/output-accumulator`, `tools/render-utils`, `tools/path-utils`, `tools/tool-definition-wrapper`, `tools/file-mutation-queue`, `tools/read`/`write`/`edit`/`edit-diff` | covered by agent-core | `utils/truncate.ts`, `utils/shell-output.ts` and `tools/*` in the vendored package are the same code; render-utils/wrapper are TUI plumbing |
+| `bash-executor` | dropped — agent-core `bash` kept | agent-core's `executeShellWithCapture` + `NodeExecutionEnv.exec` has everything pi's executor had (rolling 100 KB tail, temp file, sanitizing) plus a timeout that kills the process group and abort handling; pi's executor had no timeout of its own |
+| `output-guard` | dropped | stdout takeover for the TUI process; no terminal here |
+| `model-runtime`, `auth-storage`, `models-store`, `model-config`, `provider-composer`, `resolve-config-value`, `remote-catalog-provider`, `runtime-credentials` | vendored → `packages/harness/src/providers/` | provider-hub's sign-in, credential store and model catalog; pi-ai has the OAuth flows but not the store or the composer |
+| `model-registry`, `auth-guidance` | dropped | extension-facing facade over ModelRuntime; CLI `/login` help text |
+| `resource-loader` (context files) | ported → `src/harness/context-files.ts` | the system prompt lost AGENTS.md / CLAUDE.md discovery; same candidates and precedence, worktree dedupe skipped |
+| `resource-loader` (extensions, themes, packages), `package-manager`, `settings-manager` | dropped | pi extension/theme/package loading and pi settings.json; tools are native, settings are Local Studio's |
+| `system-prompt` | partially ported | `<project_context>` block and cwd line reproduced in `HarnessSession`; pi's tool list, guidelines and pi-docs section not wanted |
+| `prompt-templates`, `skills`, `session-manager`, `compaction/*`, `messages` | covered by agent-core | `prompt-templates.ts`, `skills.ts`, the session tree with branch summarization, `compaction/` and `messages.ts` are all in the vendored package |
+| `provider-attribution` | dropped | pi.dev attribution headers for OpenRouter/NVIDIA/Cloudflare telemetry |
+| `usage-totals`, `cache-stats` | dropped | per-model cost breakdown and cache-miss heuristics for pi's footer; `session-usage.ts` already totals input/output/cache/cost/calls/compactions from the transcript |
+| `project-trust`, `trust-manager` | dropped | ACE's gate and permission profiles cover it |
+| `agent-session`, `agent-session-runtime`, `agent-session-services`, `sdk`, `extensions/*`, `slash-commands`, `keybindings`, `footer-data-provider`, `export-html`, `event-bus`, `exec`, `http-dispatcher`, `telemetry`, `timings`, `session-cwd`, `source-info`, `pi-manifest`, `radius`, `model-resolver`, `experimental` | dropped | the pi session/TUI/SDK layer the harness replaces, or CLI-only helpers |
 
 ### Built-in tools (W4, MET-915)
 
