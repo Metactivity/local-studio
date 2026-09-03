@@ -13,6 +13,7 @@
 import { EventEmitter } from "node:events";
 import { Effect } from "effect";
 import type { ImageContent } from "@earendil-works/pi-ai";
+import type { NativeService } from "@metactivity/ace";
 import {
   type AgentMessage,
   DEFAULT_COMPACTION_SETTINGS,
@@ -29,6 +30,7 @@ import {
 } from "@local-studio/harness";
 import { NodeExecutionEnv } from "@local-studio/harness/node";
 import { type AceHarness, createAceHarness, createDefaultTools, DEFAULT_SYSTEM_PROMPT } from "./ace/ace-harness";
+import type { AnyJournalRecord } from "./ace/ace-journal";
 import { aceService, readAceConfig } from "./ace/ace-service";
 import type { ModelProfile } from "./harness/model-profile";
 import { resolveModelProfile } from "./harness/model-profile";
@@ -164,13 +166,13 @@ export async function resolveHarnessEndpoint(modelId: string): Promise<HarnessEn
   return { servedId: selected?.rawId ?? selected?.id ?? modelId, baseUrl, apiKey };
 }
 
-let aceStart: Promise<unknown> | null = null;
+let aceStart: { service: NativeService; started: Promise<unknown> } | null = null;
 
-/** The process-wide ACE service, started once; null when the environment does not describe one. */
-async function startedAceService() {
+/** The process-wide ACE service, started once per instance; null when the environment does not describe one. */
+export async function startedAceService(): Promise<NativeService | null> {
   const ace = aceService();
-  if (ace && aceStart === null) aceStart = ace.start().catch(() => undefined);
-  if (aceStart) await aceStart;
+  if (ace && aceStart?.service !== ace) aceStart = { service: ace, started: ace.start().catch(() => undefined) };
+  if (ace) await aceStart!.started;
   return ace;
 }
 
@@ -451,6 +453,11 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   adoptPiSessionId(piSessionId: string | null | undefined): void {
     const next = piSessionId?.trim();
     if (next && !this.currentSessionId) this.currentSessionId = next;
+  }
+
+  /** What ACE did to this session's turns (router, lens, gates, compaction, evaluation) — the Context Lens source. */
+  aceJournal(): AnyJournalRecord[] {
+    return this.harness?.journal.records() ?? [];
   }
 
   async compact(customInstructions?: string): Promise<unknown> {

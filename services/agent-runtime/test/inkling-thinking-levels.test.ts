@@ -19,6 +19,11 @@ describe("Inkling thinking levels", () => {
     ]);
   });
 
+  test("a profiled served model exposes the profile's efforts only, never high", () => {
+    expect(controllerModelThinkingLevels(true, "spark-qwen38-27b-rvn-q8")).toEqual(["low", "medium", "xhigh"]);
+    expect(controllerModelThinkingLevels(false, "spark-qwen38-27b-rvn-q8")).toEqual(["off"]);
+  });
+
   test("exposes every supported controller effort", () => {
     expect(controllerModelThinkingLevels(true, "deepseek-v4")).toEqual([
       "auto",

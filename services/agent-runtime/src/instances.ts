@@ -29,3 +29,8 @@ export function getGlobalSingleton<T>(key: string, create: () => T): T {
   if (!map.has(key)) map.set(key, create());
   return map.get(key) as T;
 }
+
+/** Test seam: forget a singleton so the next getGlobalSingleton() recreates it. */
+export function resetGlobalSingleton(key: string): void {
+  registry().delete(key);
+}

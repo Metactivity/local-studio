@@ -10,7 +10,7 @@ import path from "node:path";
 import type { Entry } from "@local-studio/harness";
 import { type Database, openSessionsDatabase, SqliteSessionRepo } from "./ace/sqlite-session-repo";
 import { harnessStoreRoot } from "./data-dir";
-import { getGlobalSingleton } from "./instances";
+import { getGlobalSingleton, resetGlobalSingleton } from "./instances";
 import { readSessionListMetadata } from "./session-metadata-store";
 import { accumulateUsageLine, emptyUsageTotals, type SessionUsageTotals } from "./session-usage";
 import {
@@ -290,6 +290,16 @@ export function createHarnessSessionStore(storeRoot: string): HarnessSessionStor
 /** The process-wide store under `ACE_STORE_ROOT` — shared by the harness driver and the http session handlers. */
 export function harnessSessions(): HarnessSessionStore {
   return getGlobalSingleton("harnessSessionStore", () => createHarnessSessionStore(harnessStoreRoot()));
+}
+
+/** Test seam: close the store so the next call reopens it under the current ACE_STORE_ROOT. */
+export function resetHarnessSessions(): void {
+  try {
+    harnessSessions().close();
+  } catch {
+    // The store's directory may already be gone.
+  }
+  resetGlobalSingleton("harnessSessionStore");
 }
 
 export function listSessions(cwd: string, options?: ListSessionsOptions): Promise<SessionSummary[]> {

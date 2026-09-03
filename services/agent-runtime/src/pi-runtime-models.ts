@@ -13,6 +13,7 @@ import {
 } from "../../../shared/agent/models";
 import { AGENT_THINKING_LEVELS, type AgentThinkingLevel } from "../../../shared/agent/agent-turn";
 import { resolveModelVision } from "../../../controller/contracts/model-capabilities";
+import { GENERIC_PROFILE, resolveModelProfile } from "./harness/model-profile";
 
 const PROVIDER_ID = "local-studio";
 const USER_PI_PREFIX = "user-pi-";
@@ -127,6 +128,10 @@ export function controllerModelThinkingLevels(
   reasoning: boolean,
   modelId = "",
 ): AgentThinkingLevel[] {
+  // A served model with its own profile exposes the efforts the profile maps
+  // (Qwen3.8: low | medium | xhigh — never `high`, which the template rejects).
+  const profile = resolveModelProfile(modelId);
+  if (reasoning && profile !== GENERIC_PROFILE) return [...profile.reasoning.levels];
   if (reasoning && isInklingModelId(modelId)) {
     return ["off", "minimal", "low", "medium", "high", "max"];
   }
