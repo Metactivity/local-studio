@@ -23,6 +23,7 @@ import {
   type ComposerSkillRef,
 } from "../../../../shared/agent/composer-refs";
 import { isAgentSettledEvent } from "../../../../shared/agent/pi-events";
+import { sessionIdentity } from "../../../../shared/agent/workspace-identity";
 import { markGoalTurnAborted } from "../goal-driver";
 import type { LoggedPiEvent, PiAgentSession, PiAgentStatus } from "../harness-runtime";
 import { piRuntimeManager } from "../runtime-manager";
@@ -199,7 +200,7 @@ function turnRouteEffect(request: Request): Effect.Effect<Response, unknown> {
     if (!body.ok) return jsonError(body.error, body.status);
     const parsed = parseAgentTurnRequest(body.value);
     if (!parsed.ok) return jsonError(parsed.error);
-    const turn = parsed.value;
+    const turn: AgentTurnRequest = { ...parsed.value, ...sessionIdentity(request.headers, parsed.value) };
     const commandImages = turn.images.length ? turn.images : undefined;
 
     return yield* Effect.gen(function* () {
@@ -321,9 +322,8 @@ function compactRouteEffect(request: Request): Effect.Effect<Response, unknown> 
     })) as CompactRequest | null;
     if (!body) return jsonError("Invalid JSON body");
 
-    const sessionId = body.sessionId?.trim() || "default";
+    const { sessionId, cwd } = sessionIdentity(request.headers, body);
     const modelId = body.modelId?.trim();
-    const cwd = body.cwd?.trim() || undefined;
     const piSessionId = body.piSessionId?.trim() || null;
     if (!modelId) return jsonError("modelId is required");
     if (body.thinkingLevel != null && !isAgentThinkingLevel(body.thinkingLevel)) {

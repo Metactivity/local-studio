@@ -1,4 +1,5 @@
 import { readRequestBytesWithinLimit } from "@shared/agent/agent-turn-body";
+import { TUUM_FOLDER_HEADER, TUUM_SESSION_HEADER } from "@shared/agent/workspace-identity";
 
 const HOP_BY_HOP_REQUEST_HEADERS = ["host", "connection", "content-length", "accept-encoding"];
 const DEFAULT_AGENT_RUNTIME_URL = "http://127.0.0.1:8081";
@@ -22,6 +23,16 @@ export async function proxyToAgentRuntime(
 
   const headers = new Headers(request.headers);
   for (const name of HOP_BY_HOP_REQUEST_HEADERS) headers.delete(name);
+  // ADR-034 §2.5: every runtime call carries the workspace identity as headers.
+  // The client sets them on the calls that start a session; the query-addressed
+  // routes (status, events, session lists) get them from their parameters.
+  const querySession = url.searchParams.get("sessionId")?.trim();
+  const queryFolder = url.searchParams.get("cwd")?.trim();
+  if (querySession && !headers.has(TUUM_SESSION_HEADER))
+    headers.set(TUUM_SESSION_HEADER, querySession);
+  if (queryFolder && !headers.has(TUUM_FOLDER_HEADER)) {
+    headers.set(TUUM_FOLDER_HEADER, encodeURIComponent(queryFolder));
+  }
 
   let body: ArrayBuffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
