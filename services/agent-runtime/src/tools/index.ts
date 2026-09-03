@@ -1,7 +1,6 @@
-// The built-in tool inventory of a harness session, assembled per the same
-// enable gates the pi driver applies to its bundled extensions
-// (src/builtin-plugins.ts BUILTIN_EXTENSIONS / pi-runtime-helpers
-// runtimeExtensionPaths): automations and subagents always; cua (`browser_*`)
+// The built-in tool inventory of a session, assembled per the enable gates in
+// pi-runtime-helpers `builtinToolGates` (the same inventory src/builtin-plugins.ts
+// lists for the Plugins tab): automations and subagents always; cua (`browser_*`)
 // when the Browser tool is on; chrome (`chrome_*`) on top of it when the backend
 // is the user's own Chrome AND the relay answers; github where a gh binary
 // exists; obsidian where Obsidian registered a vault; connectors when at least

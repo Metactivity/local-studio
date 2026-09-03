@@ -26,10 +26,9 @@
     "typecheck": "tsc --noEmit",
     "typecheck:desktop": "tsc -p desktop/tsconfig.json",
     "check:cycles": "madge --extensions ts,tsx --circular src",
-    "check:static": "npm run lint && npm run typecheck && npm run typecheck:desktop && npm run typecheck:extensions && npm run check:cycles && npm run check:ui-structure",
+    "check:static": "npm run lint && npm run typecheck && npm run typecheck:desktop && npm run check:cycles && npm run check:ui-structure",
     "check:quality": "node ../scripts/project.mjs validate-package && npm run check:static && npm run check:cleanup && npm run build",
-    "precommit": "lint-staged --config .lintstagedrc.json && npm run typecheck",
-    "typecheck:extensions": "tsc -p desktop/resources/pi-extensions/tsconfig.json"
+    "precommit": "lint-staged --config .lintstagedrc.json && npm run typecheck"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.2",

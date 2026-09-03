@@ -1,9 +1,9 @@
 // What every built-in harness tool is built from (MET-915, W4).
 //
-// These modules are the pi extensions of frontend/desktop/resources/pi-extensions
-// ported onto the vendored Agent's tool contract. Tool names, descriptions and
-// parameter schemas are byte-identical to the pi versions — the model prompts
-// and skills/*/SKILL.md name them — only the plumbing changed:
+// These modules are the former bundled pi extensions ported onto the vendored
+// Agent's tool contract. Tool names, descriptions and parameter schemas are
+// byte-identical to the pi versions — the model prompts and skills/*/SKILL.md
+// name them — only the plumbing changed:
 //
 //   * pi read per-session values off process.env (the runtime injected them
 //     before each session); here they arrive on `ToolContext.env`.

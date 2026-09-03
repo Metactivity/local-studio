@@ -158,10 +158,9 @@ export const isValidConnectorId = (id: string): boolean => CONNECTOR_ID_PATTERN.
 /**
  * The namespace a connector's tools are registered under.
  *
- * Mirrors what the connectors extension does when it builds `<prefix>_<tool>`
- * (desktop/resources/pi-extensions/connectors.ts). It is restated here rather
- * than shared because that file is loaded by pi from outside this package, but
- * the mapping is not free of consequence: hyphens fold to underscores, so two
+ * Mirrors what the connectors tools do when they build `<prefix>_<tool>`
+ * (src/tools/connectors.ts). The mapping is not free of consequence: hyphens
+ * fold to underscores, so two
  * ids that differ only in that separator produce the same prefix and the second
  * connector's tools would silently overwrite the first's. The upsert route
  * compares on this, not on the id.

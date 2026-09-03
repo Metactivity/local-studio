@@ -4,7 +4,6 @@ const config = {
     "desktop/main.ts",
     "desktop/preload.ts",
     "desktop/app-identity.ts",
-    "desktop/resources/pi-extensions/*.ts",
   ],
   project: ["src/**/*.{ts,tsx}", "desktop/**/*.{ts,tsx}"],
   ignore: [".next/**", ".next-dev/**", "node_modules/**"],
@@ -12,6 +11,11 @@ const config = {
     "desktop/interfaces.ts": ["types"],
   },
   ignoreDependencies: [
+    // Not imported by frontend code since the pi extensions left: kept because
+    // desktop/automation/standalone.mjs copies and asserts them in the packaged
+    // standalone and the bootstrap route reports the SDK version.
+    "@earendil-works/pi-coding-agent",
+    "typebox",
     "tailwindcss",
     "postcss",
     "@local-studio/contracts",

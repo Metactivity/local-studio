@@ -113,10 +113,6 @@ extraResources:
       - "**/*"
   - from: ../scripts/install-controller.sh
     to: app/scripts/install-controller.sh
-  - from: desktop/resources/pi-extensions
-    to: desktop/resources/pi-extensions
-    filter:
-      - "**/*"
   - from: desktop/resources/mcp
     to: desktop/resources/mcp
     filter:

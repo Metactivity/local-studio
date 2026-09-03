@@ -44,8 +44,7 @@ type AgentSessionOptionsInput = {
   processEnv?: NodeJS.ProcessEnv;
 };
 
-/** Which built-in tool families a session gets; the harness core reads these
- *  where the pi driver reads `extensionPaths` (same predicates, see below). */
+/** Which built-in tool families a session gets (src/tools/index.ts). */
 export type BuiltinToolGates = {
   browser: boolean;
   chrome: boolean;
@@ -55,20 +54,12 @@ export type BuiltinToolGates = {
 };
 
 type AgentSessionOptions = {
-  // Absolute filesystem paths to .ts/.js extension modules. The SDK's
-  // resource-loader uses jiti to load these; we hand paths instead of
-  // pre-imported factories so we never trigger webpack's static analyser on a
-  // dynamic `import(variable)` in the Next runtime bundle.
-  //
-  // The pi driver is still the default core, so the bundled pi-extensions stay
-  // in the desktop resources and keep loading here; the harness core runs the
-  // same tools in process (src/tools/, MET-915). The extension files and this
-  // list go away together with the flip to the harness core.
-  extensionPaths: string[];
   toolGates: BuiltinToolGates;
+  /** Absolute skill directories: the composer's selection plus the gated bundled ones. */
   skills: string[];
-  /** Absolute prompt-template file/dir paths; forwarded to the SDK. */
+  /** Absolute prompt-template file/dir paths the composer selected. */
   promptTemplatePaths: string[];
+  /** Per-session values the built-in tools read from `ToolContext.env`. */
   envInjections: Record<string, string>;
 };
 
@@ -125,8 +116,8 @@ export function resolveAgentCwdEffect(input?: string): Effect.Effect<string, unk
   });
 }
 
-// One resolver for every bundled resource (see plugin-resources) so the
-// extension/skill lookup and the plugin lookup cannot drift apart again.
+// One resolver for every bundled resource (see plugin-resources) so the skill
+// lookup and the plugin lookup cannot drift apart again.
 function resolveBundledResourcePath(kind: string, name: string, override?: string): string | null {
   if (override && existsSync(override)) return override;
   return resolveBundledResource(kind, name);
@@ -189,6 +180,12 @@ function shouldLoadChromeTool(options: RuntimeStartOptions): boolean {
   return shouldLoadBrowserTool(options) && browserBackend(options) === "chrome";
 }
 
+// cua = computer use: the headless throwaway browser this app launches and
+// renders in the Browser panel, armed whenever the browser tool is on. chrome =
+// the user's OWN browser through the local extension relay, registered
+// ALONGSIDE cua (`chrome_*` vs `browser_*`) so a model that can see both picks
+// per task. github wraps the `gh` CLI, so only where a binary exists; obsidian
+// needs a registered vault; connectors need at least one enabled.
 function builtinToolGates(options: RuntimeStartOptions): BuiltinToolGates {
   return {
     browser: shouldLoadBrowserTool(options),
@@ -197,86 +194,6 @@ function builtinToolGates(options: RuntimeStartOptions): BuiltinToolGates {
     obsidian: hasObsidianVaultSync(),
     connectors: hasEnabledConnectorsSync(),
   };
-}
-
-function runtimeExtensionPaths(options: RuntimeStartOptions): string[] {
-  return uniqueExistingPaths([
-    resolveBundledResourcePath(
-      "pi-extensions",
-      "local-studio-timeouts.ts",
-      process.env.LOCAL_STUDIO_TIMEOUT_EXTENSION_PATH,
-    ),
-    resolveBundledResourcePath(
-      "pi-extensions",
-      "local-studio-agent-policy.ts",
-      process.env.LOCAL_STUDIO_AGENT_POLICY_EXTENSION_PATH,
-    ),
-    // cua = computer use: the headless throwaway browser this app launches and
-    // renders in the Browser panel. Armed whenever the browser tool is on,
-    // because it is the safe default and the only backend the panel can show.
-    shouldLoadBrowserTool(options)
-      ? resolveBundledResourcePath(
-          "pi-extensions",
-          "cua.ts",
-          process.env.LOCAL_STUDIO_CUA_EXTENSION_PATH,
-        )
-      : null,
-    // chrome = the user's OWN browser, reached through the local extension
-    // relay. It is registered ALONGSIDE cua rather than instead of it: the two
-    // drive different browsers under different names (`chrome_*` vs
-    // `browser_*`), and a model that can see both picks per task — the user's
-    // session for signed-in work, the sandbox for anonymous fetching. Replacing
-    // one with the other would force the choice at composer time, before anyone
-    // knows what the task needs.
-    shouldLoadChromeTool(options)
-      ? resolveBundledResourcePath(
-          "pi-extensions",
-          "chrome.ts",
-          process.env.LOCAL_STUDIO_CHROME_EXTENSION_PATH,
-        )
-      : null,
-    // github wraps the `gh` CLI, so it only loads where a gh binary exists.
-    hasGithubCliSync()
-      ? resolveBundledResourcePath(
-          "pi-extensions",
-          "github.ts",
-          process.env.LOCAL_STUDIO_GITHUB_EXTENSION_PATH,
-        )
-      : null,
-    // obsidian reads and writes a folder of markdown files, so it needs no
-    // Obsidian process — but it does need a vault. Gated on Obsidian having
-    // registered one, on the same principle as the gh binary above: seven note
-    // tools on a machine that has never opened Obsidian are seven tools that
-    // can only apologise.
-    hasObsidianVaultSync()
-      ? resolveBundledResourcePath(
-          "pi-extensions",
-          "obsidian.ts",
-          process.env.LOCAL_STUDIO_OBSIDIAN_EXTENSION_PATH,
-        )
-      : null,
-    hasEnabledConnectorsSync()
-      ? resolveBundledResourcePath(
-          "pi-extensions",
-          "connectors.ts",
-          process.env.LOCAL_STUDIO_CONNECTORS_EXTENSION_PATH,
-        )
-      : null,
-    resolveBundledResourcePath(
-      "pi-extensions",
-      "subagents.ts",
-      process.env.LOCAL_STUDIO_SUBAGENTS_EXTENSION_PATH,
-    ),
-    // Lets the agent create/list/delete scheduled automations.
-    resolveBundledResourcePath(
-      "pi-extensions",
-      "automations.ts",
-      process.env.LOCAL_STUDIO_AUTOMATIONS_EXTENSION_PATH,
-    ),
-    // NOTE: session-goal injection is no longer a bundled extension — it runs
-    // in-process via createGoalPromptExtension (see pi-runtime.ts), keyed by the
-    // canonical piSessionId. A bundled extension read the wrong id over RPC.
-  ]);
 }
 
 function runtimeSkillPaths(options: RuntimeStartOptions): string[] {
@@ -390,17 +307,9 @@ function readChromeRelayEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   }
 }
 
-export function applyRuntimeEnvInjections(
-  envInjections: Record<string, string>,
-  env: NodeJS.ProcessEnv = process.env,
-): void {
-  for (const [key, value] of Object.entries(envInjections)) env[key] = value;
-}
-
 export function buildAgentSessionOptionsSync(input: AgentSessionOptionsInput): AgentSessionOptions {
   const options = input.options;
   return {
-    extensionPaths: runtimeExtensionPaths(options),
     toolGates: builtinToolGates(options),
     skills: runtimeSkillPaths(options),
     promptTemplatePaths: selectedPromptTemplatePaths(options.promptTemplates ?? []),
