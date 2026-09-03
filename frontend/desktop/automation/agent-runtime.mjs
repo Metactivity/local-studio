@@ -40,12 +40,8 @@ export function bundleAgentRuntime() {
     "chromium-bidi",
     "mitt",
     "devtools-protocol",
-    "@silvia-odwyer/photon-node",
-    "undici",
     "@lydell/node-pty",
     "typebox",
-    "@earendil-works/pi-agent-core",
-    "@earendil-works/pi-tui",
     "@earendil-works/pi-ai",
   ];
 
@@ -62,10 +58,6 @@ export function bundleAgentRuntime() {
       "fsevents",
       "--external",
       "playwright-core",
-      "--external",
-      "@silvia-odwyer/photon-node",
-      "--external",
-      "undici",
       "--minify",
       "--outfile=dist/standalone.mjs",
     ],
