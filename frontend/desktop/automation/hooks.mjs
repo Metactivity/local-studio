@@ -79,20 +79,23 @@ export function prePush() {
     } catch {
       defaultRef = `${remote}/main`;
     }
+    // The integration branch the push builds on: its squash titles are not ours to lint.
     let excludedRef = defaultRef;
-    try {
-      const devRef = `${remote}/dev`;
-      git(["rev-parse", "--verify", "--quiet", devRef]);
-      git(["merge-base", "--is-ancestor", devRef, localSha]);
-      excludedRef = devRef;
-    } catch {
-      // dev unavailable or not an ancestor — keep the default ref.
+    for (const candidate of [`${remote}/dev`, `${remote}/spark`]) {
+      try {
+        git(["rev-parse", "--verify", "--quiet", candidate]);
+        git(["merge-base", "--is-ancestor", candidate, localSha]);
+        excludedRef = candidate;
+        break;
+      } catch {
+        // unavailable or not an ancestor — try the next one.
+      }
     }
 
     let range;
     if (/^0{40}$/.test(remoteSha)) {
       try {
-        range = `${git(["merge-base", defaultRef, localSha])}..${localSha}`;
+        range = `${git(["merge-base", excludedRef, localSha])}..${localSha}`;
       } catch {
         range = localSha;
       }

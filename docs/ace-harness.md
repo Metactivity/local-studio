@@ -239,6 +239,21 @@ Tests: `test/ide-write.test.ts` (gate classes + ask registry, dirty → IDE / cl
 create/list/diff-content/revert over the HTTP surface, patch tool round trip against the fake extension, a scripted
 turn whose `write` on a dirty buffer goes through `ide.applyEdit` and leaves one checkpoint ref).
 
+### M7 — terminal / diagnostics / git (MET-930, packages 0.4.0)
+
+| Piece | Behaviour |
+| --- | --- |
+| Terminal tool | `ide_run_terminal {command, name?, timeout?}` → `ide.runTerminal` on a `[tuum] <name>` terminal of the editor (one per name, reused; default `agent`). With shell integration the extension streams `ide.terminal.output {termId, chunk}` — fed to the tool result as progress — and returns the bounded tail + a first-hand exit code; the tool reads like `bash` (`Command exited with code N` on failure, a timeout error when the run outlives its budget — the command keeps running in the terminal). A terminal without shell integration only gets the command typed (`captured: false`): the result says so, and the folder is remembered as "no capture" so the `bash` re-route below stops for it. Gate class: the same command classifier as `bash` (`EXEC_TOOLS` in `ace-gate.ts`); **Standard asks** for a mutating command where local `bash` is blocked, since the user watches it run |
+| `bash` re-route | `tools/terminal-route.ts`: while an IDE with capture is connected for the folder, a `bash` call whose first real segment (after `cd …`, env assignments, `time`) is a test / build / run command — `bun\|npm\|pnpm\|yarn\|deno test\|run\|x\|exec\|check`, `bunx`, `npx`, `pytest`, `python -m pytest\|unittest`, `go test\|build\|vet\|run`, `make`, `cargo test\|build\|run\|check\|clippy\|bench`, `tsc`, `vitest`, `jest`, `mvn`, `gradle(w)`, `dotnet test\|build\|run` — runs through `ide.runTerminal` instead (`[tuum] tests`), with the gate decision already taken on the `bash` call; the result carries `[ran in the IDE terminal …]`. A bridge that goes away mid-turn falls back to local bash. Everything else stays `bash` |
+| Registry | `ide-bridge/terminals.ts` keeps the runs per folder (last 50; name, command, session, exit code, `captured`, 64 KB tail) — `GET /api/agent/ide/terminals?cwd=&sessionId=` → `{runs}` |
+| Tasks / git | `ide_run_task {name}` → `ide.runTask` (`{exitCode, problemsAfter}`, class exec-read), `ide_git_status {}` → `ide.git.status`, `ide_git_diff {path?, staged?}` → `ide.git.diff` (read) |
+| Diagnostics | `ide-bridge/diagnostics.ts` (`turnDiagnostics`): after every write (`write`, `edit`, `ide_apply_edit`, `ide_create_file`) and after every run (`bash`, `ide_run_terminal`, `ide_run_task`, `ide_apply_patch`) the runtime pulls `ide.getDiagnostics` for the files the turn touched; at the end of the turn `AceHarnessOptions.phaseExtras` merges `diagnostics: [{file, errors, warnings}]` into the phase report (the IDE's pushed `ide.diagnostics.changed` summary wins over the pulled count when present), so `evaluateResult` (ace 0.4.0) flags a file left with errors. `ide_run_terminal` and the re-routed `bash` feed `validations` like local `bash` |
+| Panel | The Changes strip shows `nE mW` beside each changed file (from `/api/agent/ide/context`) and one **Terminal** row per run (name · command, exit / running / timeout / no capture, the tail behind a toggle) |
+
+Tests: `test/ide-terminal.test.ts` (classifier, gate classes incl. the Standard ask, terminal tool round trip against the
+fake extension with streamed chunks / exit codes / no-capture memo, the `bash` re-route on and off, a scripted turn whose
+phase report carries the validation verdict and the IDE's error count for the written file).
+
 ## Environment
 
 | Variable                                   | Default                                       | Role                                                                                                |

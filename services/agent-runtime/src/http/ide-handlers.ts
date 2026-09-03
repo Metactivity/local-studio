@@ -9,6 +9,7 @@ import { answerPermission, pendingPermissions } from "../ace/ace-gate";
 import { checkpointFile, revertToCheckpoint, sessionCheckpoints } from "../ide-bridge/checkpoints";
 import { diagnosticsTotals } from "../ide-bridge/context";
 import { ideBridge } from "../ide-bridge/server";
+import { terminalRuns } from "../ide-bridge/terminals";
 import { workspaceCwd } from "./ace-handlers";
 import { errorMessage, jsonError, readJsonBody } from "./helpers";
 
@@ -22,6 +23,14 @@ export function handleIdeContext(request: Request): Response {
     context,
     totals: context ? diagnosticsTotals(context) : null,
   });
+}
+
+/** The `[tuum]` terminal runs of a session in this folder (M7): name, command, exit code, output tail. */
+export function handleIdeTerminals(request: Request): Response {
+  const cwd = workspaceCwd(request);
+  if (cwd instanceof Response) return cwd;
+  const sessionId = new URL(request.url).searchParams.get("sessionId")?.trim() || undefined;
+  return Response.json({ runs: terminalRuns(cwd, sessionId) });
 }
 
 // ─── Checkpoints ──────────────────────────────────────────────────────────

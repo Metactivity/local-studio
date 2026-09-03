@@ -128,6 +128,8 @@ export type IdeContextReport = {
     tabs: string[];
     lastSaved: string | null;
     dirty: string[];
+    /** Per-uri error/warning counts, only files with at least one. */
+    diagnostics: Record<string, { errors: number; warnings: number }>;
     scm: {
       branch: string | null;
       ahead: number;
@@ -140,6 +142,24 @@ export type IdeContextReport = {
 
 export const loadIdeContext = (cwd: string) =>
   call<IdeContextReport>(withCwd("/api/agent/ide/context", cwd));
+
+/** One `[tuum]` terminal run the agent started in the editor (ADR-034 M7). */
+export type IdeTerminalRun = {
+  termId: string | null;
+  name: string;
+  command: string;
+  sessionId: string;
+  startedAt: string;
+  endedAt: string | null;
+  exitCode: number | null;
+  captured: boolean;
+  tail: string;
+};
+
+export const loadIdeTerminals = (cwd: string, sessionId: string) =>
+  call<{ runs: IdeTerminalRun[] }>(
+    `/api/agent/ide/terminals?${new URLSearchParams({ cwd, sessionId })}`,
+  ).then((payload) => payload.runs);
 
 export const rebuildAceGraph = (cwd: string) =>
   post<{ indexedFiles: number; pendingFiles: number }>("/api/agent/ace/rebuild-graph", { cwd });

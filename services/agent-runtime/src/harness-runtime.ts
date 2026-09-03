@@ -30,7 +30,7 @@ import {
   uuidv7,
 } from "@local-studio/harness";
 import { NodeExecutionEnv } from "@local-studio/harness/node";
-import { type AceHarness, type BeforeToolEvent, createAceHarness, createDefaultTools, DEFAULT_SYSTEM_PROMPT } from "./ace/ace-harness";
+import { type AceHarness, type AfterToolEvent, type BeforeToolEvent, createAceHarness, createDefaultTools, DEFAULT_SYSTEM_PROMPT } from "./ace/ace-harness";
 import type { AnyJournalRecord } from "./ace/ace-journal";
 import { aceService, readAceConfig } from "./ace/ace-service";
 import type { ModelProfile } from "./harness/model-profile";
@@ -55,10 +55,12 @@ import { resolvePiAgentDir } from "./user-plugins";
 import { classifyToolAccess } from "./ace/ace-gate";
 import { createTurnCheckpoint } from "./ide-bridge/checkpoints";
 import { ideContextBlock } from "./ide-bridge/context";
+import { turnDiagnostics } from "./ide-bridge/diagnostics";
 import { IdeAwareExecutionEnv } from "./ide-bridge/env";
 import { ideBridge } from "./ide-bridge/server";
 import { builtinTools, type ToolContext, withAgentPolicy, withTimeoutPolicy } from "./tools";
 import { ideTools } from "./tools/ide";
+import { withTerminalRoute } from "./tools/terminal-route";
 import type { AgentImageInput } from "../../../shared/agent/agent-image-input";
 import type { AgentQueueAction } from "../../../shared/agent/agent-turn";
 import type { RuntimeContextUsage } from "../../../shared/agent/context-usage";
@@ -298,8 +300,14 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
     const sessionOptions = buildAgentSessionOptionsSync({ options: startOptions, cwd: resolvedCwd });
     const env = { ...process.env, ...sessionOptions.envInjections };
     const tools = [
-      // Files open and dirty in the IDE are read and written through the editor (ADR-034 M6, ide-bridge/env.ts).
-      ...withTimeoutPolicy(createDefaultTools(resolvedCwd, ace, new IdeAwareExecutionEnv({ cwd: resolvedCwd })), env),
+      // Files open and dirty in the IDE are read and written through the editor (ADR-034 M6, ide-bridge/env.ts);
+      // test / build / run commands go to the IDE terminal while one is connected (M7, tools/terminal-route.ts).
+      ...withTerminalRoute(withTimeoutPolicy(createDefaultTools(resolvedCwd, ace, new IdeAwareExecutionEnv({ cwd: resolvedCwd })), env), {
+        cwd: resolvedCwd,
+        sessionId,
+        env,
+        bridge: ideBridge(),
+      }),
       ...(await builtinTools({ cwd: resolvedCwd, sessionId, modelId, env, request: this.#request, gates: sessionOptions.toolGates })),
     ];
     const executionEnv = new NodeExecutionEnv({ cwd: resolvedCwd });
@@ -317,6 +325,8 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       ].join("\n\n"),
     );
 
+    // The IDE's diagnostics for the files this turn touched ride into the phase report (M7).
+    const diagnostics = turnDiagnostics(resolvedCwd);
     const harness = await createAceHarness({
       cwd: resolvedCwd,
       sessionRepo: store.repo,
@@ -326,6 +336,7 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       ace,
       thinkingLevel: level,
       systemPrompt,
+      phaseExtras: diagnostics.phaseExtras,
       ...(startOptions.toolAccess === "read_only" ? { tools: tools.filter((tool) => READ_ONLY_TOOLS.has(tool.name)) } : { tools }),
       ...(session ? { session } : { sessionId }),
     });
@@ -371,6 +382,8 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       },
       { id: "local-studio-checkpoint" },
     );
+
+    harness.hooks.on("after_tool", (raw) => diagnostics.afterTool(raw as AfterToolEvent), { id: "local-studio-diagnostics" });
 
     const offLoop = harness.events.on("loop", (event) => this.onLoopEvent(event as PiEvent));
     const offJournal = harness.journal.subscribe((record) => {
@@ -496,7 +509,7 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   /** The base tools, plus the `ide_*` actions while an IDE is connected for this folder (like the chrome probe, per turn). */
   private toolsForTurn(): AgentTool[] {
     if (this.currentStartOptions.toolAccess === "read_only" || !ideBridge().isConnected(this.currentCwd)) return this.baseTools;
-    return [...this.baseTools, ...ideTools(this.currentCwd)];
+    return [...this.baseTools, ...ideTools(this.currentCwd, ideBridge(), { sessionId: this.currentSessionId ?? "", env: process.env })];
   }
 
   /** What ACE did to this session's turns (router, lens, gates, compaction, evaluation) — the Context Lens source. */
