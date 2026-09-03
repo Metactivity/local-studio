@@ -26,7 +26,7 @@ import { isAgentSettledEvent } from "../../../../shared/agent/pi-events";
 import { markGoalTurnAborted } from "../goal-driver";
 import type { LoggedPiEvent, PiAgentSession, PiAgentStatus } from "../harness-runtime";
 import { piRuntimeManager } from "../runtime-manager";
-import { listSessions } from "../sessions-store";
+import { listSessions } from "../harness-sessions";
 import {
   sessionListChangedVersion,
   subscribeSessionListChanged,

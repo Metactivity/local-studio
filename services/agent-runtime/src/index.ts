@@ -1,7 +1,7 @@
 // Public surface of the agent runtime package. Route handlers may also import
 // concrete modules via subpaths (e.g. "@local-studio/agent-runtime/pi-runtime").
 export { piRuntimeManager } from "./runtime-manager";
-export { listSessions, loadSession } from "./sessions-store";
+export { listSessions, loadSession } from "./harness-sessions";
 export { browserHost } from "./browser-host/browser-host";
 export { fetchReadable } from "./browser-host/reader";
 export { discoverSkills, loadSkillInstructions } from "./skill-discovery";

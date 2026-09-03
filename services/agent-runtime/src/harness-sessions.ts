@@ -1,9 +1,9 @@
-// Sessions for the harness core: list / load over the SQLite session repo
-// (src/ace/sqlite-session-repo.ts), shaped exactly like the pi JSONL store so
-// the http session handlers and the frontend fold need no change. The events
-// a load returns are the session's own entries (`{type:"message", message}`,
-// `{type:"compaction", summary}`, `{type:"model_change"}`) behind one
-// synthesized `{type:"session"}` header — the same vocabulary pi writes.
+// The session store: list / load over the SQLite session repo
+// (src/ace/sqlite-session-repo.ts), shaped exactly like the pi JSONL store it
+// replaced so the http session handlers and the frontend fold need no change.
+// The events a load returns are the session's own entries (`{type:"message",
+// message}`, `{type:"compaction", summary}`, `{type:"model_change"}`) behind
+// one synthesized `{type:"session"}` header — the same vocabulary pi wrote.
 
 import { realpathSync } from "node:fs";
 import path from "node:path";
@@ -12,17 +12,7 @@ import { type Database, openSessionsDatabase, SqliteSessionRepo } from "./ace/sq
 import { harnessStoreRoot } from "./data-dir";
 import { getGlobalSingleton } from "./instances";
 import { readSessionListMetadata } from "./session-metadata-store";
-import { accumulateUsageLine, emptyUsageTotals } from "./session-usage";
-import {
-  applySessionMetadata,
-  type ListSessionsOptions,
-  type LoadSessionOptions,
-  type LoadSessionResult,
-  normalizeListOptions,
-  type SessionEvent,
-  summaryMatchesListOptions,
-  summaryStartTime,
-} from "./sessions-store";
+import { accumulateUsageLine, emptyUsageTotals, type SessionUsageTotals } from "./session-usage";
 import {
   cleanSessionTitle,
   sessionTitleFromUserPrompt,
@@ -32,6 +22,85 @@ import type { SessionSummary } from "../../../shared/agent/session-summary";
 const DEFAULT_TAIL = 500;
 
 export { harnessStoreRoot };
+
+export type SessionEvent = Record<string, unknown> & { type?: string };
+
+export type ListSessionsOptions = {
+  since?: Date;
+  ids?: string[];
+  includeArchived?: boolean;
+  archivedOnly?: boolean;
+  limit?: number;
+};
+
+export type LoadSessionOptions = {
+  /** Return only the last N transcript messages, snapped back to a user turn. Omit for a full read. */
+  tail?: number;
+  /** Entry `seq` cursor from a prior tail response: the page that ends just before it ("load earlier"). */
+  before?: number;
+};
+
+export type LoadSessionMeta = {
+  title: string | null;
+  modelId: string | null;
+  startedAt: string | null;
+  piSessionId: string | null;
+  /** Lifetime spend for the whole session, not just the returned page. */
+  usage: SessionUsageTotals;
+};
+
+export type LoadSessionResult = {
+  events: SessionEvent[];
+  /** Cursor to pass as `before` for the previous (older) page, or null at the start. */
+  cursor: number | null;
+  /** Present only on an initial tail load — a paged `before` request omits it. */
+  meta: LoadSessionMeta | null;
+};
+
+type NormalizedListOptions = {
+  sinceMs?: number;
+  wantedIds: Set<string>;
+  archivedOnly: boolean;
+  includeArchived: boolean;
+};
+
+function normalizeListOptions(options: ListSessionsOptions): NormalizedListOptions {
+  const sinceMs = options.since?.getTime();
+  return {
+    sinceMs: Number.isFinite(sinceMs) ? sinceMs : undefined,
+    wantedIds: new Set((options.ids ?? []).map((id) => id.trim()).filter(Boolean)),
+    includeArchived: Boolean(options.includeArchived),
+    archivedOnly: Boolean(options.archivedOnly),
+  };
+}
+
+function summaryStartTime(session: Pick<SessionSummary, "startedAt" | "updatedAt">): number {
+  const value = Date.parse(session.startedAt || session.updatedAt);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function applySessionMetadata(
+  summary: SessionSummary,
+  metadataFor: ReturnType<typeof readSessionListMetadata>,
+): SessionSummary {
+  const metadata = metadataFor(summary.id);
+  const titled = typeof metadata.title === "string" ? metadata.title.trim() : "";
+  return {
+    ...summary,
+    archived: metadata.archived,
+    archivedAt: metadata.archivedAt,
+    parentSessionId: metadata.parentSessionId,
+    subagentName: metadata.subagentName,
+    firstUserMessage: titled || summary.firstUserMessage,
+  };
+}
+
+function summaryMatchesListOptions(summary: SessionSummary, options: NormalizedListOptions): boolean {
+  if (!options.archivedOnly) return options.includeArchived || !summary.archived;
+  if (!summary.archived) return false;
+  const relevant = Date.parse(summary.archivedAt || summary.updatedAt || summary.startedAt);
+  return options.sinceMs === undefined || (Number.isFinite(relevant) ? relevant : 0) >= options.sinceMs;
+}
 
 type SessionRow = { id: string; created_at: number; cwd: string | null };
 
@@ -221,4 +290,12 @@ export function createHarnessSessionStore(storeRoot: string): HarnessSessionStor
 /** The process-wide store under `ACE_STORE_ROOT` — shared by the harness driver and the http session handlers. */
 export function harnessSessions(): HarnessSessionStore {
   return getGlobalSingleton("harnessSessionStore", () => createHarnessSessionStore(harnessStoreRoot()));
+}
+
+export function listSessions(cwd: string, options?: ListSessionsOptions): Promise<SessionSummary[]> {
+  return harnessSessions().listSessions(cwd, options);
+}
+
+export function loadSession(cwd: string, sessionId: string, options?: LoadSessionOptions): Promise<LoadSessionResult> {
+  return harnessSessions().loadSession(cwd, sessionId, options);
 }
