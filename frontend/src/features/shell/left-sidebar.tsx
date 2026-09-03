@@ -118,7 +118,7 @@ export function LeftSidebar({ children }: { children: ReactNode }) {
         return;
       }
       event.preventDefault();
-      router.push(hrefWithOpenNonce("/agent?new=1&replace=1"));
+      router.push(hrefWithOpenNonce("/ide?new=1&replace=1"));
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -191,7 +191,7 @@ export function LeftSidebar({ children }: { children: ReactNode }) {
     [clampedSidebarWidth, isExpanded, setSidebarWidth],
   );
   const openNewTask = useCallback(
-    () => router.push(hrefWithOpenNonce("/agent?new=1&replace=1")),
+    () => router.push(hrefWithOpenNonce("/ide?new=1&replace=1")),
     [router],
   );
 

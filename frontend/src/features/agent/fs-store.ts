@@ -1,16 +1,20 @@
-import {
-  constants,
-  existsSync,
-  promises as fs,
-  lstatSync,
-  readdirSync,
-  realpathSync,
-  statSync,
-} from "node:fs";
+// What is left of the Local Studio filesystem layer after ADR-034 M8: the
+// composer's @file mention picker (search + snippet read) and the timeline's
+// inline media (raw bytes). Browsing and editing files is the IDE's job.
+
+import { constants, promises as fs, lstatSync, readdirSync, realpathSync } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
-import type { FsEntry } from "@/features/agent/filesystem-types";
 import { listProjectsFromStore } from "@local-studio/agent-runtime/projects-store";
+
+export type FsEntry = {
+  name: string;
+  path: string;
+  rel: string;
+  kind: "file" | "directory";
+  size?: number;
+  modifiedAt?: string;
+};
 
 const IGNORE_DIRS = new Set([
   ".git",
@@ -63,8 +67,8 @@ const RESOLVED_SYSTEM_ROOTS = new Set(
 );
 
 // Reject the filesystem root and system directories as workspace roots. Returns
-// the symlink-resolved absolute path. Used by the filesystem and terminal
-// routes before any read/list/exec against a caller-supplied cwd.
+// the symlink-resolved absolute path. Used by the filesystem and PR routes
+// before any read/exec against a caller-supplied cwd.
 export function assertWorkspaceRoot(rootCwd: string): string {
   const resolved = path.resolve(rootCwd);
   const real = (() => {
@@ -93,7 +97,7 @@ function resolveRealPath(candidate: string): string {
   }
 }
 
-// Trust boundary: agent filesystem list/read operates inside the caller's
+// Trust boundary: agent filesystem search/read operates inside the caller's
 // current workspace cwd, while still rejecting filesystem roots and system
 // directories. Registered projects remain accepted, but exact registration is
 // not required: sessions may run from the repo opened by the app, a project
@@ -126,49 +130,14 @@ function ensureInside(rootCwd: string, target: string): string {
   return realTarget;
 }
 
-export function listDirectory(rootCwd: string, relPath: string): FsEntry[] {
-  const root = resolveWorkspaceRoot(rootCwd);
-  const target = ensureInside(root, path.resolve(root, relPath || "."));
-  if (!existsSync(target)) throw new Error("Not found");
-  const stats = statSync(target);
-  if (!stats.isDirectory()) throw new Error("Not a directory");
-
-  const names = readdirSync(target);
-  const entries: FsEntry[] = [];
-  for (const name of names) {
-    if (IGNORE_DIRS.has(name)) continue;
-    if (name.startsWith(".") && name !== ".env.example") continue;
-    const abs = path.join(target, name);
-    let s: ReturnType<typeof statSync>;
-    try {
-      s = statSync(abs);
-    } catch {
-      continue;
-    }
-    entries.push({
-      name,
-      path: abs,
-      rel: path.relative(root, abs),
-      kind: s.isDirectory() ? "directory" : "file",
-      size: s.isFile() ? s.size : undefined,
-      modifiedAt: s.mtime.toISOString(),
-    });
-  }
-  entries.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
-  return entries;
-}
-
 const SEARCH_MAX_VISITED = 20_000;
 const SEARCH_MAX_DEPTH = 12;
 
 // Recursive, query-aware file lookup for the composer's @-mention picker. A
 // single-level listing can only offer files sitting directly in the workspace
 // root, so every nested file — nearly all of them in a real repo — was
-// unreachable. Walks breadth-first (shallow matches first) under the same
-// ignore rules as listDirectory, with hard caps so a huge tree cannot stall the
+// unreachable. Walks breadth-first (shallow matches first) under the ignore
+// rules above, with hard caps so a huge tree cannot stall the
 // request. Symlinks are skipped entirely: that keeps the walk inside the root
 // and cannot loop, so no per-entry ensureInside is needed.
 export function searchFiles(rootCwd: string, query: string, limit = 20): FsEntry[] {
@@ -271,16 +240,4 @@ export async function openReadableFile(
     await file.close();
     throw error;
   }
-}
-
-export async function writeFileContent(
-  rootCwd: string,
-  relPath: string,
-  content: string,
-): Promise<void> {
-  const root = resolveWorkspaceRoot(rootCwd);
-  const target = ensureInside(root, path.resolve(root, relPath));
-  const stats = await fs.stat(target);
-  if (!stats.isFile()) throw new Error("Not a file");
-  await fs.writeFile(target, content, "utf8");
 }

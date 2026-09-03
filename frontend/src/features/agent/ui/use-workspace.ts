@@ -36,11 +36,19 @@ import {
   useWorkspaceRuntimeSync,
 } from "@/features/agent/ui/use-workspace-effects";
 import type { ChatPaneHandle } from "@/features/agent/ui/chat-pane";
-import type { SessionDropPayload } from "@/features/agent/ui/pane-grid";
 import {
   readDefaultAgentModel,
   writeDefaultAgentModel,
 } from "@/features/agent/workspace/model-preference";
+
+export type SessionDropPayload = {
+  piSessionId?: string | null;
+  projectId?: string;
+  cwd?: string;
+  paneId?: string;
+  tabId?: string;
+  title?: string;
+};
 
 export type WorkspaceHandles = {
   registerComputerAside: (element: HTMLElement | null) => void;
@@ -64,7 +72,6 @@ export type WorkspaceHandles = {
   setDefaultModel: (modelId: string) => void;
   notifySessionsChanged: () => void;
   startComputerResize: (event: ReactMouseEvent<HTMLDivElement>) => void;
-  initGitForActiveProject: () => Promise<void>;
 };
 
 export type UseWorkspaceResult = {
@@ -337,16 +344,6 @@ export function useWorkspace({ ephemeral = false }: UseWorkspaceOptions = {}): U
         };
         window.addEventListener("mousemove", onMove);
         window.addEventListener("mouseup", onUp);
-      },
-      initGitForActiveProject: async () => {
-        try {
-          await projectsRef.current.initGitForActiveProject();
-        } catch (error) {
-          dispatch({
-            type: "setError",
-            error: error instanceof Error ? error.message : "Failed to initialize git repository",
-          });
-        }
       },
     }),
     [dispatch, ephemeral, getReplayQueue],

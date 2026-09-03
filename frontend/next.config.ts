@@ -105,6 +105,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname, ".."),
   },
+  // The legacy /agent workbench is gone (ADR-034 M8): the IDE page hosts the
+  // agent panel. Query params (project, session, new) carry over.
+  async redirects() {
+    return [{ source: "/agent", destination: "/ide", permanent: false }];
+  },
   async rewrites() {
     return [
       {
@@ -115,7 +120,7 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     // Baseline security headers. The CSP is intentionally permissive on inline
-    // scripts/styles (Next's hydration + theme bootstrap script, Tailwind, xterm,
+    // scripts/styles (Next's hydration + theme bootstrap script, Tailwind,
     // highlight.js) and on connect targets (same-origin proxy, SSE/WebSocket),
     // so it adds a backstop without breaking the app; it can be tightened later
     // with per-request nonces. `frame-ancestors 'none'` blocks clickjacking.

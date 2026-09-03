@@ -11,7 +11,6 @@ export const BROWSER_BACKEND_KEY = "local-studio.agent.browserBackend";
 export const BROWSER_TOOL_DEFAULT_OFF_MIGRATION_KEY =
   "***************************************************";
 export const COMPUTER_BROWSER_OPEN_KEY = "local-studio.agent.computer.browserOpen";
-export const COMPUTER_FILES_OPEN_KEY = "local-studio.agent.computer.filesOpen";
 export const COMPUTER_DEFAULT_CLOSED_STORAGE_ID = "local-studio.agent.computer.defaultCollapsedV2";
 export const COMPUTER_WIDTH_KEY = "local-studio.agent.computer.width";
 export const COMPUTER_TAB_KEY = "local-studio.agent.computer.tab";
@@ -101,7 +100,6 @@ export function migrateToolStorage(): void {
   }
   if (!read(COMPUTER_DEFAULT_CLOSED_STORAGE_ID)) {
     write(COMPUTER_BROWSER_OPEN_KEY, "0");
-    write(COMPUTER_FILES_OPEN_KEY, "0");
     write(COMPUTER_DEFAULT_CLOSED_STORAGE_ID, "1");
   }
   // Computer panel always boots closed regardless of last session.
@@ -125,10 +123,7 @@ export function loadComputerState(): ComputerState {
   const storedTab = read(COMPUTER_TAB_KEY);
   const tab: ComputerTab = isComputerTab(storedTab) ? storedTab : "status";
   const storedTabs = readComputerTabs();
-  const persistedTabs = uniqueComputerTabs([
-    "status",
-    ...(storedTabs.length ? storedTabs : [tab]),
-  ]);
+  const persistedTabs = uniqueComputerTabs(["status", ...(storedTabs.length ? storedTabs : [tab])]);
   const tabs = persistedTabs.includes(tab)
     ? persistedTabs
     : uniqueComputerTabs([...persistedTabs, tab]);
@@ -192,7 +187,6 @@ export function writeBrowserBackend(backend: BrowserBackend): void {
 }
 
 export function writeComputerTab(tab: ComputerTab): void {
-  write(COMPUTER_FILES_OPEN_KEY, tab === "files" ? "1" : "0");
   write(COMPUTER_TAB_KEY, tab);
 }
 

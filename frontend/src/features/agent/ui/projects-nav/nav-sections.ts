@@ -2,9 +2,9 @@
 
 import { useState, type DragEvent } from "react";
 
-export type SectionId = "projects" | "tasks" | "terminals";
+export type SectionId = "projects" | "tasks";
 
-const SECTION_IDS: SectionId[] = ["projects", "tasks", "terminals"];
+const SECTION_IDS: SectionId[] = ["projects", "tasks"];
 const NAV_SECTION_ORDER_KEY = "local-studio.agent.nav-section-order.v1";
 
 function readSectionOrder(): SectionId[] {

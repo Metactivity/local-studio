@@ -59,10 +59,10 @@ const APP_DESTINATIONS: AppDestination[] = [
     description: "Scheduled and event-driven agent runs.",
   },
   {
-    href: "/agent",
-    label: "Workbench",
-    keywords: "agent chat projects browser terminal tools files",
-    description: "Project-aware chat, terminals, files, and tools.",
+    href: "/ide",
+    label: "IDE",
+    keywords: "ide editor agent chat projects browser workbench",
+    description: "The editor with the project-aware agent panel.",
   },
   {
     href: "/settings",
@@ -80,7 +80,7 @@ type PaletteRow = { key: string; section: string; href: string } & (
 
 function agentSessionHref(projectId: string, sessionId: string | null): string {
   const sessionParam = sessionId ? `&session=${encodeURIComponent(sessionId)}` : "";
-  return `/agent?project=${encodeURIComponent(projectId)}${sessionParam}&replace=1`;
+  return `/ide?project=${encodeURIComponent(projectId)}${sessionParam}&replace=1`;
 }
 
 function isRunning(status: string): boolean {

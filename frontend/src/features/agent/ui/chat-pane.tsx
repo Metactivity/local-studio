@@ -10,7 +10,6 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { useMountSubscription } from "@/hooks/use-mount-subscription";
 import { AgentChatPaneHeader } from "@/features/agent/ui/agent-chat-pane-header";
 import { AgentComposerFrame } from "@/features/agent/ui/agent-composer-frame";
 import { type FileMentionRow, type MentionRow } from "@/features/agent/ui/agent-composer-context";
@@ -18,7 +17,6 @@ import { builtinCommandProvider } from "@/features/agent/composer/builtin-comman
 import { AutomationDrawer } from "@/features/agent/ui/automation-drawer";
 import { ComposerProjectDrawer } from "@/features/agent/ui/composer-project-drawer";
 import { TranscriptSessionContext } from "@/features/agent/ui/timeline/subagent-row";
-import { GitDiffDrawer } from "@/features/agent/ui/git-diff-drawer";
 import {
   promptTemplateCommandProvider,
   skillCommandProvider,
@@ -63,7 +61,7 @@ import { respondExtensionUi } from "@/features/agent/runtime/api";
 import { useSessionEngine } from "@/features/agent/runtime/engine";
 import type { Session, UpdateSession } from "@/features/agent/runtime/types";
 import { useTools } from "@/features/agent/tools/context";
-import type { GitSummary, Project } from "@/features/agent/projects/types";
+import type { Project } from "@/features/agent/projects/types";
 import type { BrowserBackend } from "@/features/agent/tools/types";
 import type { AgentThinkingLevel } from "@/features/agent/contracts";
 import {
@@ -75,18 +73,6 @@ import {
   exportFilenameFromTitle,
   sessionToMarkdown,
 } from "@/features/agent/messages/export-markdown";
-import {
-  OPEN_TERMINAL_EVENT,
-  type OpenTerminalEventDetail,
-  type TerminalOwner,
-} from "@/features/agent/terminal-owners";
-import {
-  rememberPersistentTerminalOwner,
-  selectPersistentTerminalOwner,
-  usePersistentTerminalOwners,
-  type TerminalOwnersSnapshot,
-} from "@/features/agent/ui/use-persistent-terminal-owners";
-import { PersistentTerminals } from "@/features/agent/ui/persistent-terminals";
 import { cx } from "@/ui/utils";
 import { ExtensionUiDialog } from "@/features/agent/ui/extension-ui-dialog";
 export type { ChatPaneHandle };
@@ -139,7 +125,6 @@ function chatPaneClassName(composerOnly: boolean): string {
 
 function ChatTranscript({
   composerOnly,
-  terminalView,
   showEmptyPrompt,
   activeTab,
   stickToBottom,
@@ -150,7 +135,6 @@ function ChatTranscript({
   loadEarlierHistory,
 }: {
   composerOnly: boolean;
-  terminalView: boolean;
   showEmptyPrompt: boolean;
   activeTab: Session | undefined;
   stickToBottom: boolean;
@@ -172,25 +156,25 @@ function ChatTranscript({
   if (composerOnly) return null;
   return (
     <TranscriptSessionContext value={transcriptSession}>
-    <div className={terminalView ? "hidden" : "flex min-h-0 min-w-0 flex-1"}>
-      {showEmptyPrompt ? (
-        <EmptyPromptTimeline />
-      ) : (
-        <Timeline
-          key={activeTab?.id ?? "empty"}
-          stickToBottom={stickToBottom}
-          onStickToBottomChange={setStickToBottom}
-          messages={activeTab?.messages ?? []}
-          running={running}
-          cwd={cwd || null}
-          viewKey={viewKey}
-          viewAlias={viewAlias}
-          onForkSession={onForkSession}
-          hasEarlier={activeTab?.historyCursor != null}
-          onLoadEarlier={loadEarlierHistory}
-        />
-      )}
-    </div>
+      <div className="flex min-h-0 min-w-0 flex-1">
+        {showEmptyPrompt ? (
+          <EmptyPromptTimeline />
+        ) : (
+          <Timeline
+            key={activeTab?.id ?? "empty"}
+            stickToBottom={stickToBottom}
+            onStickToBottomChange={setStickToBottom}
+            messages={activeTab?.messages ?? []}
+            running={running}
+            cwd={cwd || null}
+            viewKey={viewKey}
+            viewAlias={viewAlias}
+            onForkSession={onForkSession}
+            hasEarlier={activeTab?.historyCursor != null}
+            onLoadEarlier={loadEarlierHistory}
+          />
+        )}
+      </div>
     </TranscriptSessionContext>
   );
 }
@@ -206,9 +190,6 @@ type Props = {
   cwd: string;
   projectName: string | null;
   modelSelector?: (props: ComposerModelSelectorProps) => ReactNode;
-  gitBranch?: string | null;
-  gitSummary?: GitSummary | null;
-  onInitGit?: () => void;
   browserToolEnabled: boolean;
   browserBackend: BrowserBackend;
   onToggleBrowserBackend: () => void;
@@ -222,8 +203,6 @@ type Props = {
   onRenameSession: (tabId: string, title: string) => void;
   onClose?: () => void;
   onForkSession?: () => void;
-  onOpenTerminal?: () => void;
-  terminalOwner?: TerminalOwner | null;
   rightPanelOpen: boolean;
   onToggleRightPanel: () => void;
   onRegisterHandle?: (handle: ChatPaneHandle | null) => void;
@@ -255,9 +234,6 @@ export function ChatPane({
   cwd,
   projectName,
   modelSelector,
-  gitBranch,
-  gitSummary,
-  onInitGit,
   browserToolEnabled,
   browserBackend,
   onToggleBrowserBackend,
@@ -271,8 +247,6 @@ export function ChatPane({
   onRenameSession,
   onClose,
   onForkSession,
-  onOpenTerminal,
-  terminalOwner = null,
   rightPanelOpen,
   onToggleRightPanel,
   onRegisterHandle,
@@ -295,29 +269,6 @@ export function ChatPane({
     showEmptyPrompt,
     visibleQueueItems,
   } = useChatPaneDerivedState({ activeTabId, contextWindow, tabs });
-  const [terminalView, setTerminalView] = useState(false);
-  const terminalSnapshot = usePersistentTerminalOwners(
-    terminalView,
-    terminalView ? terminalOwner : null,
-  );
-  const toggleTerminalView = useCallback(() => {
-    setTerminalView((open) => {
-      const next = !open;
-      if (next && terminalOwner) rememberPersistentTerminalOwner(terminalOwner, { select: true });
-      return next;
-    });
-  }, [terminalOwner]);
-  useMountSubscription(() => {
-    if (!isFocused) return;
-    const onOpenTerminalEvent = (event: Event) => {
-      const detail = (event as CustomEvent<OpenTerminalEventDetail>).detail;
-      if (!detail?.mountKey) return;
-      selectPersistentTerminalOwner(detail.mountKey);
-      setTerminalView(true);
-    };
-    window.addEventListener(OPEN_TERMINAL_EVENT, onOpenTerminalEvent);
-    return () => window.removeEventListener(OPEN_TERMINAL_EVENT, onOpenTerminalEvent);
-  }, [isFocused]);
   const updateTab = onUpdateSession;
   const {
     attachments,
@@ -443,9 +394,6 @@ export function ChatPane({
     tools.setComputerTab("status");
     tools.setComputerOpen(true);
   }, [tools]);
-  const [diffDrawerOpen, setDiffDrawerOpen] = useState(false);
-  const openDiffDrawer = useCallback(() => setDiffDrawerOpen(true), []);
-  const closeDiffDrawer = useCallback(() => setDiffDrawerOpen(false), []);
   const exportSession = useCallback(() => {
     if (!activeTab) return;
     const markdown = sessionToMarkdown(activeTab.messages, displayedSessionTitle);
@@ -454,7 +402,6 @@ export function ChatPane({
   const canExport = Boolean(
     activeTab?.messages.some((message) => message.role !== "system" && message.text.trim()),
   );
-  const openTerminalAction = terminalOwner ? toggleTerminalView : onOpenTerminal;
   const applyTemplate = useCallback(
     (row: ComposerPromptTemplateRef) =>
       activeTab ? applyContextRow(activeTab.id, "promptTemplate", row, tools) : Promise.resolve(),
@@ -507,7 +454,6 @@ export function ChatPane({
           // The command is `/connectors`, so it lands on the tab it names
           // rather than on whichever tab the page happens to open with.
           openIntegrations: () => router.push("/settings#mcp"),
-          ...(openTerminalAction ? { openTerminal: openTerminalAction } : {}),
           ...(onForkSession ? { forkSession: onForkSession } : {}),
           ...(canExport ? { exportSession } : {}),
           goal: goalAction,
@@ -530,7 +476,6 @@ export function ChatPane({
       onForkSession,
       onToggleBrowserTool,
       openComputerStatus,
-      openTerminalAction,
       router,
       tools.promptTemplateCatalogue,
       tools.skillCatalogue,
@@ -655,8 +600,6 @@ export function ChatPane({
         extensionUiRequest={activeTab?.extensionUiRequest}
         onExtensionUiRespond={handleExtensionUiResponse}
         showHeader={showHeader}
-        terminalView={terminalView}
-        terminalSnapshot={terminalSnapshot}
         header={{
           title: displayedSessionTitle,
           pinned: sessionPinned,
@@ -667,8 +610,6 @@ export function ChatPane({
           onTogglePinned: togglePinnedSession,
           onRename: renameActiveSession,
           onFork: onForkSession,
-          onOpenTerminal: openTerminalAction,
-          terminalOpen: terminalView,
           onExport: exportSession,
           onClose,
           onToggleRightPanel,
@@ -676,7 +617,6 @@ export function ChatPane({
       />
       <ChatTranscript
         composerOnly={composerOnly}
-        terminalView={terminalView}
         showEmptyPrompt={showEmptyPrompt}
         activeTab={activeTab}
         stickToBottom={stickToBottom}
@@ -686,15 +626,7 @@ export function ChatPane({
         onForkSession={onForkSession}
         loadEarlierHistory={loadEarlierHistory}
       />
-      <div className={terminalView ? "hidden" : "contents"}>
-        {diffDrawerOpen ? (
-          <GitDiffDrawer
-            cwd={cwd || null}
-            gitBranch={gitBranch}
-            gitSummary={gitSummary}
-            onClose={closeDiffDrawer}
-          />
-        ) : null}
+      <div className="contents">
         {automationDrawerOpen ? (
           <AutomationDrawer
             modelId={modelId}
@@ -713,8 +645,6 @@ export function ChatPane({
           currentContextTokens={currentContextTokens}
           cwd={cwd}
           fileInputRef={fileInputRef}
-          gitBranch={gitBranch}
-          gitSummary={gitSummary}
           input={composerInput}
           mention={mention}
           mentionIndex={mentionIndex}
@@ -732,9 +662,7 @@ export function ChatPane({
             handleComposerKeyDown(event);
           }}
           onComposerPaste={handleComposerPaste}
-          onInitGit={onInitGit}
           onOpenStatus={openComputerStatus}
-          onOpenDiff={openDiffDrawer}
           onRemoveAttachment={removeAttachment}
           onRemoveLoadedContext={removeLoadedContext}
           onSelectMention={(entry) => void handleSelectMention(entry)}
@@ -749,10 +677,6 @@ export function ChatPane({
               revision={goalRevision}
               projectName={projectName}
               cwd={cwd}
-              gitBranch={gitBranch}
-              gitSummary={gitSummary}
-              onInitGit={onInitGit}
-              onOpenDiff={openDiffDrawer}
               showProjectRow={composerVisual.showProjectRow}
               running={Boolean(running)}
               onProjectPicked={handleProjectPicked}
@@ -779,15 +703,12 @@ export function ChatPane({
   );
 }
 
-/** The pane's fixed furniture: a pending extension prompt, the header, and the
- *  terminal surface that swaps places with the transcript. Kept out of ChatPane
- *  so the container reads as state and wiring rather than layout. */
+/** The pane's fixed furniture: a pending extension prompt and the header. Kept
+ *  out of ChatPane so the container reads as state and wiring rather than layout. */
 function ChatPaneChrome({
   extensionUiRequest,
   onExtensionUiRespond,
   showHeader,
-  terminalView,
-  terminalSnapshot,
   header,
 }: {
   extensionUiRequest: Session["extensionUiRequest"];
@@ -797,8 +718,6 @@ function ChatPaneChrome({
     cancelled?: boolean;
   }) => void;
   showHeader: boolean;
-  terminalView: boolean;
-  terminalSnapshot: TerminalOwnersSnapshot;
   header: ComponentProps<typeof AgentChatPaneHeader>;
 }) {
   return (
@@ -807,13 +726,6 @@ function ChatPaneChrome({
         <ExtensionUiDialog request={extensionUiRequest} onRespond={onExtensionUiRespond} />
       ) : null}
       {showHeader ? <AgentChatPaneHeader {...header} /> : null}
-      <div className={terminalView ? "flex min-h-0 min-w-0 flex-1 flex-col" : "hidden"}>
-        <PersistentTerminals
-          active={terminalView}
-          activeOwnerKey={terminalSnapshot.activeOwnerKey}
-          terminals={terminalSnapshot.owners}
-        />
-      </div>
     </>
   );
 }

@@ -7,15 +7,14 @@ import { Activity, Code, Layers, Plus, Zap } from "@/ui/icon-registry";
 export type IconComponent = ComponentType<{ className?: string; strokeWidth?: number }>;
 
 export const tabs = [
+  { href: "/ide", label: "IDE", icon: Code },
   { href: "/", label: "Status", icon: Activity },
   { href: "/models", label: "Models", icon: Layers },
-  { href: "/ide", label: "IDE", icon: Code },
   { href: "/agent/automations", label: "Automations", icon: Zap },
 ];
 
 export function mobilePageTitle(pathname: string): string {
   if (pathname.startsWith("/agent/automations")) return "Automations";
-  if (pathname.startsWith("/agent")) return "Tasks";
   if (pathname.startsWith("/settings")) return "Settings";
   const tab = tabs.find((entry) => isRouteActive(pathname, entry.href));
   return tab?.label ?? "Local Studio";
@@ -23,9 +22,6 @@ export function mobilePageTitle(pathname: string): string {
 
 export function isRouteActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
-  if (href === "/agent") {
-    return pathname.startsWith("/agent") && !pathname.startsWith("/agent/automations");
-  }
   if (href === "/agent/automations") return pathname.startsWith("/agent/automations");
   if (href === "/settings") return pathname.startsWith("/settings");
   return pathname.startsWith(href);
@@ -52,7 +48,7 @@ export function NavNewTaskMobile({
 }) {
   return (
     <Link
-      href="/agent?new=1&replace=1"
+      href="/ide?new=1&replace=1"
       prefetch={false}
       onClick={onClick}
       className="mb-2 flex h-11 items-center gap-3 rounded-lg border border-(--border)/70 bg-(--surface-2)/25 px-3 text-[15px] text-(--fg)/90 transition-colors active:bg-(--hover)"

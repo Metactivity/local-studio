@@ -201,6 +201,10 @@ export const showCheckpointFile = (
   mode: "open" | "diff",
 ) => post<{ ok: boolean }>("/api/agent/checkpoints/show", { cwd, sessionId, n, path, mode });
 
+/** Open `path` (relative to `cwd`) in the embedded editor through the IDE bridge. */
+export const openInIde = (cwd: string, path: string) =>
+  post<{ ok: boolean }>("/api/agent/checkpoints/show", { cwd, path, mode: "open" });
+
 export const loadPendingPermissions = (cwd: string) =>
   call<{ pending: PendingPermission[] }>(withCwd("/api/agent/permissions", cwd)).then(
     (payload) => payload.pending,

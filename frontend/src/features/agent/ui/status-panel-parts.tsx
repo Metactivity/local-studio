@@ -29,22 +29,6 @@ const VALUE_TONE: Record<MeterTone, string> = {
 
 /** Fraction of a limit, as a tone. Thresholds match the composer's budget
  *  colouring so "getting full" looks the same everywhere in the app. */
-export function fractionTone(fraction: number): MeterTone {
-  if (!Number.isFinite(fraction) || fraction <= 0) return "dim";
-  if (fraction >= 0.9) return "err";
-  if (fraction >= 0.75) return "warn";
-  return "ok";
-}
-
-/** Temperature has absolute meaning, not proportional: 85 °C is hot on every
- *  card, so it is banded rather than scaled against a maximum. */
-export function temperatureTone(celsius: number): MeterTone {
-  if (!Number.isFinite(celsius) || celsius <= 0) return "dim";
-  if (celsius >= 85) return "err";
-  if (celsius >= 75) return "warn";
-  return "ok";
-}
-
 export function StatusGroup({
   title,
   count,

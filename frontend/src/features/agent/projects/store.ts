@@ -1,26 +1,18 @@
-import { SESSIONS_CHANGED_EVENT } from "@/lib/workspace-events";
 import * as defaultApi from "@/features/agent/projects/api";
-import type { GitSummary, Project, ProjectId } from "@/features/agent/projects/types";
+import type { Project, ProjectId } from "@/features/agent/projects/types";
 
 export type ProjectsSnapshot = {
   projects: Project[];
   loaded: boolean;
   selectedId: ProjectId | null;
-  gitSummaries: ReadonlyMap<string, GitSummary>;
 };
 
-type ProjectsApi = Pick<
-  typeof defaultApi,
-  "initGit" | "loadGitSummary" | "loadProjects" | "removeProject"
->;
-
-type BrowserWindowLike = Pick<Window, "addEventListener" | "dispatchEvent" | "removeEventListener">;
+type ProjectsApi = Pick<typeof defaultApi, "loadProjects" | "removeProject">;
 
 export type ProjectsStoreDependencies = {
   api?: ProjectsApi;
   readSelectedProjectId?: () => ProjectId | null;
   writeSelectedProjectId?: (id: ProjectId | null) => void;
-  getWindow?: () => BrowserWindowLike | null;
 };
 
 export type ProjectsStore = {
@@ -31,30 +23,18 @@ export type ProjectsStore = {
   upsertProject: (project: Project) => void;
   removeProject: (id: string) => Promise<void>;
   moveProjectBefore: (dragId: string, targetId: string | null) => void;
-  loadGitSummary: (cwd: string) => Promise<GitSummary | null>;
-  initGitForActiveProject: () => Promise<void>;
-};
-
-const getBrowserWindow = (): BrowserWindowLike | null =>
-  typeof window === "undefined" ? null : window;
-
-const notify = (target: BrowserWindowLike | null, eventName: string): void => {
-  target?.dispatchEvent(new Event(eventName));
 };
 
 export function createProjectsStore(dependencies: ProjectsStoreDependencies = {}): ProjectsStore {
   const api = dependencies.api ?? defaultApi;
   const readSelection = dependencies.readSelectedProjectId ?? readSelectedProjectId;
   const writeSelection = dependencies.writeSelectedProjectId ?? writeSelectedProjectId;
-  const getWindow = dependencies.getWindow ?? getBrowserWindow;
   const listeners = new Set<() => void>();
   let started = false;
-  let lastGitFetch: string | null = null;
   let snapshot: ProjectsSnapshot = {
     projects: applyProjectOrder(readCachedProjects()),
     loaded: false,
     selectedId: readSelection(),
-    gitSummaries: new Map(),
   };
 
   const emit = (): void => {
@@ -75,30 +55,6 @@ export function createProjectsStore(dependencies: ProjectsStoreDependencies = {}
     update({ ...snapshot, projects });
   };
 
-  const loadGitSummary = async (cwd: string): Promise<GitSummary | null> => {
-    if (!cwd) return null;
-    try {
-      const summary = await api.loadGitSummary(cwd);
-      const next = new Map(snapshot.gitSummaries);
-      if (summary) next.set(cwd, summary);
-      else next.delete(cwd);
-      update({ ...snapshot, gitSummaries: next });
-      return summary;
-    } catch {
-      if (!snapshot.gitSummaries.has(cwd)) return null;
-      const next = new Map(snapshot.gitSummaries);
-      next.delete(cwd);
-      update({ ...snapshot, gitSummaries: next });
-      return null;
-    }
-  };
-
-  const loadGitSummaryOnce = (cwd: string): void => {
-    if (!cwd || lastGitFetch === cwd) return;
-    lastGitFetch = cwd;
-    void loadGitSummary(cwd);
-  };
-
   const refresh = async (): Promise<void> => {
     let projects: Project[] = [];
     try {
@@ -111,7 +67,6 @@ export function createProjectsStore(dependencies: ProjectsStoreDependencies = {}
     const selectedId = resolveSelectedProjectId(previousSelectedId, projects);
     update({ ...snapshot, projects, loaded: true, selectedId });
     if (selectedId !== previousSelectedId) writeSelection(selectedId);
-    void loadGitSummary(projectPathById(projects, selectedId));
   };
 
   const start = (): void => {
@@ -136,10 +91,7 @@ export function createProjectsStore(dependencies: ProjectsStoreDependencies = {}
       };
     },
     refresh,
-    selectProject: (project) => {
-      setSelectedId(project?.id ?? null);
-      loadGitSummaryOnce(project?.path ?? "");
-    },
+    selectProject: (project) => setSelectedId(project?.id ?? null),
     upsertProject: (project) => {
       replaceProjects([project, ...snapshot.projects.filter((entry) => entry.id !== project.id)]);
       void refresh();
@@ -166,15 +118,6 @@ export function createProjectsStore(dependencies: ProjectsStoreDependencies = {}
       writeCachedProjects(projects);
       replaceProjects(projects);
     },
-    loadGitSummary,
-    initGitForActiveProject: async () => {
-      const cwd = projectPathById(snapshot.projects, snapshot.selectedId);
-      if (!cwd) return;
-      await api.initGit(cwd);
-      await loadGitSummary(cwd);
-      void refresh();
-      notify(getWindow(), SESSIONS_CHANGED_EVENT);
-    },
   };
 }
 
@@ -184,10 +127,6 @@ function resolveSelectedProjectId(
 ): ProjectId | null {
   if (current && projects.some((project) => project.id === current)) return current;
   return projects[0]?.id ?? null;
-}
-
-function projectPathById(projects: readonly Project[], projectId: ProjectId | null): string {
-  return projects.find((project) => project.id === projectId)?.path ?? "";
 }
 
 const SELECTED_PROJECT_KEY = "local-studio.agent.selectedProjectId";

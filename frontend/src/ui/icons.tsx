@@ -122,14 +122,6 @@ export function GlobeIcon(props: IconProps) {
   );
 }
 
-export function GitBranchIcon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 2a2 2 0 0 1 .8 3.8v4.4a2 2 0 1 1-1.6 0V5.8A2 2 0 0 1 4 2zm8 0a2 2 0 0 1 .8 3.8C12.6 8.5 10.5 9 8.8 9.2A2 2 0 1 1 7.4 7.7c1.5-.2 3.2-.6 3.7-2A2 2 0 0 1 12 2z" />
-    </Svg>
-  );
-}
-
 export function UserBrowserIcon(props: IconProps) {
   // The user's own browser: a ring with a solid core, the concentric mark every
   // Chromium-family browser wears. Deliberately unlike PanelIcon (the embedded

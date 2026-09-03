@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, lazy, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { triggerAddProjectFlow } from "@/features/agent/ui/projects-nav/helpers";
 import {
@@ -9,25 +9,17 @@ import {
 } from "@/features/agent/ui/quick-panel/quick-panel-top-bar";
 import { CloseIcon, PlusIcon } from "@/ui/icons";
 import type { WorkspaceDispatch } from "@/features/agent/workspace/effects";
-import type { AgentModel, WorkspaceState } from "@/features/agent/workspace/types";
+import type { WorkspaceState } from "@/features/agent/workspace/types";
 import { useProjects, type ProjectsContextValue } from "@/features/agent/projects/context";
 import { useTools } from "@/features/agent/tools/context";
 import type { Project } from "@/features/agent/projects/types";
 import { focusedSession } from "@/features/agent/runtime/selectors";
-import { PaneGrid } from "@/features/agent/ui/pane-grid";
 import { useWorkspace, type WorkspaceHandles } from "@/features/agent/ui/use-workspace";
 import { renderWorkspacePane } from "@/features/agent/ui/render-workspace-pane";
 import { useAgentWorkspaceNavigationEffects } from "@/features/agent/ui/agent-workspace-navigation";
 import { useMountSubscription } from "@/hooks/use-mount-subscription";
 import { POPOVER_SURFACE_CLASS } from "@/ui/popover";
 import { cx } from "@/ui/utils";
-import { collectLeaves } from "@/features/agent/workspace/layout";
-
-const LazyAgentBrowserPanel = lazy(() =>
-  import("@/features/agent/ui/agent-browser-panel").then(({ AgentBrowserPanel }) => ({
-    default: AgentBrowserPanel,
-  })),
-);
 
 type AgentWorkspaceShellProps = {
   state: WorkspaceState;
@@ -100,9 +92,6 @@ export function AgentWorkspaceShell({
     ...activeSessionIdentity,
     setActiveComputerSession: tools.setActiveComputerSession,
   });
-  const focusedModel =
-    state.models.find((model) => model.id === (focusedTab?.modelId ?? state.selectedModel)) ?? null;
-  const focusedGitSummary = projects.gitSummary(activeProject?.path ?? focusedTab?.cwd);
   const showProjectEmptyState = shouldShowProjectEmptyState(projects, projectParam);
   const focusedMessageCount = focusedTab?.messages.length ?? 0;
   const panelMode = quickPanelMode(compact, showProjectEmptyState, focusedMessageCount);
@@ -110,10 +99,7 @@ export function AgentWorkspaceShell({
   useQuickPanelExpandEffect(compact, panelMode === "thread");
   return (
     <div data-quick-panel-state={panelMode} className={workspaceClassName(panelMode)}>
-      <div
-        className="agent-workspace-panel-row relative flex min-h-0 flex-1"
-        data-multi-pane={collectLeaves(state.layout).length > 1 ? "true" : undefined}
-      >
+      <div className="agent-workspace-panel-row relative flex min-h-0 flex-1">
         <section className="relative flex min-w-0 flex-1 flex-col">
           <WorkspaceTopBar
             error={state.error}
@@ -139,62 +125,8 @@ export function AgentWorkspaceShell({
             composerOnly={composerOnly}
           />
         </section>
-        {!compact ? (
-          <WorkspaceComputerPanel
-            open={tools.computer.open}
-            handles={handles}
-            activeProject={activeProject}
-            focusedTab={focusedTab}
-            sessions={state.sessions}
-            selectedModel={state.selectedModel}
-            models={state.models}
-            modelsLoading={state.modelsLoading}
-            focusedModel={focusedModel}
-            focusedGitSummary={focusedGitSummary}
-          />
-        ) : null}
       </div>
     </div>
-  );
-}
-
-function WorkspaceComputerPanel({
-  open,
-  handles,
-  activeProject,
-  focusedTab,
-  sessions,
-  selectedModel,
-  models,
-  modelsLoading,
-  focusedModel,
-  focusedGitSummary,
-}: {
-  open: boolean;
-  handles: WorkspaceHandles;
-  activeProject: Project | null;
-  focusedTab: ReturnType<typeof focusedSession>;
-  sessions: WorkspaceState["sessions"];
-  selectedModel: string;
-  models: AgentModel[];
-  modelsLoading: boolean;
-  focusedModel: AgentModel | null;
-  focusedGitSummary: ReturnType<ProjectsContextValue["gitSummary"]>;
-}) {
-  return (
-    <Suspense fallback={open ? <ComputerPanelFallback /> : null}>
-      <LazyAgentBrowserPanel
-        handles={handles}
-        activeProject={activeProject}
-        focusedSession={focusedTab}
-        sessions={[...sessions.values()]}
-        activeModelId={focusedTab?.modelId ?? selectedModel}
-        activeModel={focusedModel}
-        gitSummary={focusedGitSummary}
-        models={models}
-        modelsLoading={modelsLoading}
-      />
-    </Suspense>
   );
 }
 
@@ -218,45 +150,19 @@ function WorkspacePaneContent({
   composerOnly: boolean;
 }) {
   if (showEmptyState) return <ProjectEmptyState />;
-  if (compact) {
-    return (
-      <div className="flex min-h-0 flex-1">
-        {renderWorkspacePane({
-          paneId: state.focusedPaneId,
-          state,
-          projects,
-          tools,
-          dispatch,
-          handles,
-          compact,
-          composerOnly,
-        })}
-      </div>
-    );
-  }
   return (
-    <div className="min-h-0 flex-1">
-      <PaneGrid
-        layout={state.layout}
-        renderPane={(paneId) =>
-          renderWorkspacePane({ paneId, state, projects, tools, dispatch, handles, compact })
-        }
-        onSplit={handles.splitPaneWithPayload}
-        onOpenTab={handles.openSessionPayloadInPane}
-        onResize={handles.setSplitRatio}
-      />
+    <div className="flex min-h-0 flex-1">
+      {renderWorkspacePane({
+        paneId: state.focusedPaneId,
+        state,
+        projects,
+        tools,
+        dispatch,
+        handles,
+        compact,
+        composerOnly,
+      })}
     </div>
-  );
-}
-
-function ComputerPanelFallback() {
-  return (
-    <aside className="relative flex w-[360px] shrink-0 flex-col bg-(--color-panel) shadow-[var(--elev-side-panel)]">
-      <div className="h-[var(--h-toolbar-pane)] shrink-0 border-b border-(--border) bg-(--color-header)" />
-      <div className="flex min-h-0 flex-1 items-center justify-center text-xs text-(--dim)">
-        Loading tools...
-      </div>
-    </aside>
   );
 }
 

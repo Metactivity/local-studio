@@ -140,7 +140,7 @@ function matchingOpen(
 
 function sessionHref(projectId: string, sessionId: string | null | undefined): string {
   const sessionParam = sessionId ? `&session=${encodeURIComponent(sessionId)}` : "";
-  return `/agent?project=${encodeURIComponent(projectId)}${sessionParam}&replace=1`;
+  return `/ide?project=${encodeURIComponent(projectId)}${sessionParam}&replace=1`;
 }
 
 function readCollapsed(): Set<string> {

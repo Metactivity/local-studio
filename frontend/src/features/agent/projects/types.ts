@@ -16,14 +16,6 @@ export type Project = {
   branch: string | null;
 };
 
-export type GitSummary = {
-  isRepo: boolean;
-  branch?: string | null;
-  additions: number;
-  deletions: number;
-  statusCount: number;
-};
-
 export function isChatsProject(project: Pick<Project, "id"> | null | undefined): boolean {
   return project?.id === CHATS_PROJECT_ID;
 }

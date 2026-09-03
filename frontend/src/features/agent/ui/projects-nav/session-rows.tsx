@@ -367,7 +367,7 @@ export function ActiveSessionRow({
       label={label}
       initialDraft={cleanSessionTitle(pref.title) || cleanSessionTitle(session.title)}
       rowClass={rowClass}
-      href={`/agent?project=${encodeURIComponent(project.id)}${
+      href={`/ide?project=${encodeURIComponent(project.id)}${
         session.threadId ? `&session=${encodeURIComponent(session.threadId)}&replace=1` : ""
       }`}
       onOpen={() => {
@@ -462,7 +462,7 @@ export function SessionRow({
       timestamp={session.updatedAt || session.startedAt}
       rowClass={`group relative flex h-[var(--sidebar-row-height)] items-center rounded-[var(--sidebar-row-radius)] pl-2 pr-0 transition-[color,background-color,opacity] hover:bg-(--hover) ${dragging ? "opacity-45" : ""}`}
       renameRowClass="flex h-[var(--sidebar-row-height)] items-center rounded-[var(--sidebar-row-radius)] bg-(--surface)/40 pl-2 pr-1"
-      href={`/agent?project=${encodeURIComponent(project.id)}&session=${encodeURIComponent(session.id)}&replace=1`}
+      href={`/ide?project=${encodeURIComponent(project.id)}&session=${encodeURIComponent(session.id)}&replace=1`}
       onPatchPref={(patch) => patchSessionPref(session.id, patch)}
       onArchive={() => {
         void setSessionArchive(session.id, project, label, true)
@@ -508,7 +508,7 @@ export function NewChatPlusButton({
   const openNewChat = () => {
     onNavigateStart?.();
     const href = hrefWithOpenNonce(
-      `/agent?project=${encodeURIComponent(project.id)}&new=1&replace=1`,
+      `/ide?project=${encodeURIComponent(project.id)}&new=1&replace=1`,
     );
     router.push(href);
   };

@@ -254,6 +254,24 @@ Tests: `test/ide-terminal.test.ts` (classifier, gate classes incl. the Standard 
 fake extension with streamed chunks / exit codes / no-capture memo, the `bash` re-route on and off, a scripted turn whose
 phase report carries the validation verdict and the IDE's error count for the written file).
 
+### M8 — what Local Studio no longer implements (MET-931)
+
+The IDE is the workbench: nothing in the frontend or the runtime duplicates Code-OSS for files, git, terminal or
+diff any more. `/agent` redirects to `/ide` (query params carry over: `?project=&session=&new=`); `/agent/automations`
+and `/quick` stay.
+
+| Gone | Replaced by |
+| --- | --- |
+| Files pane (`filesystem-*`, file viewer, comments) + `GET /api/agent/fs`, `PUT /api/agent/fs/file`, `/api/agent/comments` | The explorer and editor; a file reference in the timeline opens through `POST /api/agent/checkpoints/show {mode: open}` (`ide.openFile`) |
+| Review pane (`git-diff-*`), the composer's branch / diff-count / init-git widgets and branch / worktree switching, `git.ts`, `/api/agent/git*`, `/api/agent/pr*` (frontend) | The SCM view; the model has `ide_git_status` / `ide_git_diff` |
+| xterm terminal (`terminal-panel`, `web-pty-bridge`, persistent terminal owners, the nav's Terminals section, `/terminal` slash command, terminal key-binding settings), `/api/agent/terminal*`, runtime `pty-service.ts` + `pty-handlers.ts`, `@lydell/node-pty` in the runtime, `@xterm/*` | The editor's terminal; the model has `ide_run_terminal` and the `bash` re-route (M7) |
+| The `/agent` computer panel (status, tools launcher, side chat, browser tab) and the pane grid | The `/ide` right column: Chat, Browser (the embedded browser stays Local Studio-native), Context, Memory, ACE; a subagent row links to its session on `/ide` |
+
+Still here on purpose: `GET /api/agent/fs/search` and `GET /api/agent/fs/file` (the composer's `@file` mention
+picker), `GET /api/agent/fs/raw` (inline media in the timeline), `highlight-cache.ts` (code blocks in the timeline),
+the harness `read` / `edit` / `grep` / `bash` tools (runtime tools, not UI), every `ide_*` tool, the runtime's
+project branch lookup for the nav, and the Electron desktop's own pty manager (`frontend/desktop/logic/`).
+
 ## Environment
 
 | Variable                                   | Default                                       | Role                                                                                                |

@@ -18,7 +18,6 @@ import type { BrowserBackend } from "@/features/agent/tools/types";
 import type { ComposerBanner } from "@/features/agent/composer/composer-visual-state";
 import { Spinner } from "@/ui";
 import { POPOVER_MENU_CLASS } from "@/ui/popover";
-import type { GitSummary } from "@/features/agent/projects/types";
 import { AgentAttachmentTray, type AgentComposerAttachment } from "./agent-attachment-tray";
 import { AgentComposerActions } from "./agent-composer-actions";
 import {
@@ -43,8 +42,6 @@ export type AgentComposerFrameProps = {
   currentContextTokens: number;
   cwd: string;
   fileInputRef: RefObject<HTMLInputElement | null>;
-  gitBranch?: string | null;
-  gitSummary?: GitSummary | null;
   input: string;
   mention: ComposerMention | null;
   mentionIndex: number;
@@ -59,9 +56,7 @@ export type AgentComposerFrameProps = {
   onComposerDrop: DragEventHandler<HTMLDivElement>;
   onComposerKeyDown: KeyboardEventHandler<HTMLTextAreaElement>;
   onComposerPaste: ClipboardEventHandler<HTMLTextAreaElement>;
-  onInitGit?: () => void;
   onOpenStatus: () => void;
-  onOpenDiff: () => void;
   onRemoveAttachment: (id: string) => void;
   onRemoveLoadedContext: (kind: LoadedContextKind, id: string) => void;
   onSelectMention: (entry: MentionRow) => void;
@@ -93,8 +88,6 @@ export function AgentComposerFrame({
   currentContextTokens,
   cwd,
   fileInputRef,
-  gitBranch,
-  gitSummary,
   input,
   mention,
   mentionIndex,
@@ -109,9 +102,7 @@ export function AgentComposerFrame({
   onComposerDrop,
   onComposerKeyDown,
   onComposerPaste,
-  onInitGit,
   onOpenStatus,
-  onOpenDiff,
   onRemoveAttachment,
   onRemoveLoadedContext,
   onSelectMention,
@@ -234,13 +225,9 @@ export function AgentComposerFrame({
       {showStatusBar ? (
         <AgentComposerStatusBar
           cwd={cwd}
-          gitBranch={gitBranch}
-          gitSummary={gitSummary}
-          onInitGit={onInitGit}
           currentContextTokens={currentContextTokens}
           contextWindow={contextWindow}
           onOpenStatus={onOpenStatus}
-          onOpenDiff={onOpenDiff}
         />
       ) : (
         <div

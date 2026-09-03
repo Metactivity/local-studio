@@ -9,7 +9,6 @@ export type BuiltinComposerActions = {
   openStatus: () => void;
   toggleBrowserTool: () => void;
   openIntegrations: () => void;
-  openTerminal?: () => void;
   forkSession?: () => void;
   exportSession?: () => void;
   /** `/goal <objective>` and `/goal pause|resume|clear`. Resolves to an error message or null. */
@@ -62,7 +61,6 @@ export function builtinCommandProvider(actions: BuiltinComposerActions): Compose
         "Manage connectors and accounts",
         actions.openIntegrations,
       ),
-      ...command("terminal", "Terminal", "Open the terminal", actions.openTerminal),
       ...command("fork", "Fork", "Fork this session into a new pane", actions.forkSession),
       ...command("export", "Export", "Export this session as Markdown", actions.exportSession),
       ...command(
@@ -79,7 +77,8 @@ export function builtinCommandProvider(actions: BuiltinComposerActions): Compose
               title: "Goal",
               // The subcommands' only surface: the empty-args path enters goal
               // mode before the action's usage string can ever print.
-              description: "Set a goal to keep pursuing — also: pause · resume · clear · budget <n|off>",
+              description:
+                "Set a goal to keep pursuing — also: pause · resume · clear · budget <n|off>",
               source: "core",
               icon: "command" as const,
               run: async (args: string) => {

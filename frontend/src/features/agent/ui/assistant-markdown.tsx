@@ -25,7 +25,9 @@ import {
   cleanFileReference,
   remarkLocalMediaReferences,
   type AssistantMediaKind,
+  resolveFileOpenTarget,
 } from "@/features/agent/ui/assistant-media";
+import { openInIde } from "@/features/ace/api";
 
 const FILE_REF_PATTERN =
   /^(?:file:\/\/|~\/|\.{1,2}\/|\/|[\w.-]+\/)[^\s`'")]+(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)(?::\d+(?::\d+)?)?$/;
@@ -199,20 +201,20 @@ type ToolHandlers = {
   setComputerOpen: (open: boolean) => void;
   setComputerTab: (tab: ComputerTab) => void;
   setBrowserUrl: (url: string, input?: string) => void;
-  requestFileOpen: (path: string) => void;
 };
 
+/** A file reference (file://, :line suffix, cwd-relative or absolute) opens in the editor through the IDE bridge. */
+function openFileInIde(raw: string, cwd: string | null) {
+  const target = resolveFileOpenTarget(cleanFileReference(raw), cwd);
+  if (!target || target.kind !== "file") return;
+  void openInIde(target.root, target.rel).catch(() => undefined);
+}
+
 function buildComponentsWithAppLinks(tools: ToolHandlers, cwd: string | null): Components {
-  // Clicking a file reference opens it in the right panel's Files view with the
-  // file selected — on both web and desktop. `requestFileOpen` opens the panel,
-  // switches to the files tab, and the filesystem effect resolves the path
-  // (file://, :line suffix, cwd-relative, or absolute-under-cwd) and previews
-  // images/markdown/etc via its own previewKind logic.
-  //
   // Alt-click is the explicit "Reveal" affordance: on desktop it reveals the
   // file in Finder/Explorer (server-side path resolution), falling back to the
-  // in-app Files view when reveal is unavailable or fails; on web there is no OS
-  // file manager, so it just opens the Files view like a plain click.
+  // editor when reveal is unavailable or fails; on web it opens the editor
+  // like a plain click.
   const openFileReference = (raw: string, revealInOs: boolean) => {
     const cleaned = cleanFileReference(raw);
     if (!cleaned) return;
@@ -220,13 +222,13 @@ function buildComponentsWithAppLinks(tools: ToolHandlers, cwd: string | null): C
     if (reveal) {
       void reveal(cleaned).then(
         (ok) => {
-          if (!ok) tools.requestFileOpen(cleaned);
+          if (!ok) openFileInIde(cleaned, cwd);
         },
-        () => tools.requestFileOpen(cleaned),
+        () => openFileInIde(cleaned, cwd),
       );
       return;
     }
-    tools.requestFileOpen(cleaned);
+    openFileInIde(cleaned, cwd);
   };
   return {
     ...components,
@@ -415,11 +417,10 @@ function AssistantMarkdownInner({ text, cwd = null }: { text: string; cwd?: stri
           setComputerOpen: tools.setComputerOpen,
           setComputerTab: tools.setComputerTab,
           setBrowserUrl: tools.setBrowserUrl,
-          requestFileOpen: tools.requestFileOpen,
         },
         cwd,
       ),
-    [cwd, tools.setComputerOpen, tools.setComputerTab, tools.setBrowserUrl, tools.requestFileOpen],
+    [cwd, tools.setComputerOpen, tools.setComputerTab, tools.setBrowserUrl],
   );
   return (
     <div className="chat-markdown min-w-0 max-w-full overflow-x-hidden [overflow-wrap:anywhere]">

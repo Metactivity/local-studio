@@ -24,7 +24,7 @@ import type { ApiConnectionSettings, ConnectionStatus } from "./types";
 import { ApiConnectionSection } from "./api-connection-section";
 import { ArchivedChatsSettings, SetupChecksSettings } from "./agent-settings-sections";
 import { AppearanceSettings } from "./appearance-settings";
-import { ShortcutsSettings } from "./terminal-settings";
+import { QuickPanelSettings } from "./quick-panel-settings";
 import { EnginesSection } from "./engines-section";
 import { ServicesSettings, SystemDetails, SystemOverview } from "./system-settings-section";
 import { useMountSubscription } from "@/hooks/use-mount-subscription";
@@ -71,7 +71,7 @@ const SECTIONS: SettingsSectionDef[] = [
   ["accounts", "Google accounts", "Google services a session can read from.", KeyRound],
   ["usage", "Usage", "Tokens, requests, latency, and errors.", Activity],
   ["appearance", "Appearance", "Theme, typography, and interface scale.", Paintbrush],
-  ["terminal", "Shortcuts", "Quick panel and terminal key bindings.", Keyboard],
+  ["terminal", "Shortcuts", "Quick panel key bindings.", Keyboard],
   ["archive", "Archived chats", "Sessions hidden from the task list.", Archive],
 ].map(([id, label, description, Icon]) => ({
   id: id as SettingsSectionId,
@@ -206,7 +206,7 @@ export function SettingsView({
       {activeSection === "accounts" ? <AccountsSettingsSection /> : null}
       {activeSection === "usage" ? <UsageSettingsSection /> : null}
       {activeSection === "appearance" ? <AppearanceSettings /> : null}
-      {activeSection === "terminal" ? <ShortcutsSettings /> : null}
+      {activeSection === "terminal" ? <QuickPanelSettings /> : null}
       {activeSection === "archive" ? <ArchivedChatsSettings /> : null}
       {activeSection === "setup" ? <SetupChecksSettings /> : null}
     </SettingsLayout>

@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { createProjectsStore, type ProjectsStore } from "@/features/agent/projects/store";
-import type { GitSummary, Project, ProjectId } from "@/features/agent/projects/types";
+import type { Project, ProjectId } from "@/features/agent/projects/types";
 
 export type ProjectsContextValue = {
   projects: Project[];
@@ -17,7 +17,6 @@ export type ProjectsContextValue = {
   selectedProject: Project | null;
   selectedProjectId: ProjectId | null;
   agentCwd: string;
-  gitSummary: (cwd: string | null | undefined) => GitSummary | null;
   findById: (id: string | null | undefined) => Project | null;
   findByPath: (path: string | null | undefined) => Project | null;
   resolveProject: (tab: { projectId?: string; cwd?: string } | null | undefined) => Project | null;
@@ -26,8 +25,6 @@ export type ProjectsContextValue = {
   removeProject: (id: string) => Promise<void>;
   moveProjectBefore: (dragId: string, targetId: string | null) => void;
   refresh: () => Promise<void>;
-  loadGitSummary: (cwd: string) => Promise<GitSummary | null>;
-  initGitForActiveProject: () => Promise<void>;
 };
 
 const ProjectsContext = createContext<ProjectsStore | null>(null);
@@ -40,7 +37,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 export function useProjects(): ProjectsContextValue {
   const store = useContext(ProjectsContext);
   if (!store) throw new Error("useProjects must be used within a ProjectsProvider");
-  const { projects, loaded, selectedId, gitSummaries } = useSyncExternalStore(
+  const { projects, loaded, selectedId } = useSyncExternalStore(
     store.subscribe,
     store.getSnapshot,
     store.getSnapshot,
@@ -66,12 +63,6 @@ export function useProjects(): ProjectsContextValue {
     [findById, findByPath, selectedId],
   );
 
-  const gitSummary = useCallback(
-    (cwd: string | null | undefined): GitSummary | null =>
-      cwd ? (gitSummaries.get(cwd) ?? null) : null,
-    [gitSummaries],
-  );
-
   const selectedProject = useMemo(() => findById(selectedId), [findById, selectedId]);
   const agentCwd = selectedProject?.path ?? "";
 
@@ -82,7 +73,6 @@ export function useProjects(): ProjectsContextValue {
       selectedProject,
       selectedProjectId: selectedId,
       agentCwd,
-      gitSummary,
       findById,
       findByPath,
       resolveProject,
@@ -91,8 +81,6 @@ export function useProjects(): ProjectsContextValue {
       removeProject: store.removeProject,
       moveProjectBefore: store.moveProjectBefore,
       refresh: store.refresh,
-      loadGitSummary: store.loadGitSummary,
-      initGitForActiveProject: store.initGitForActiveProject,
     }),
     [
       projects,
@@ -100,7 +88,6 @@ export function useProjects(): ProjectsContextValue {
       selectedProject,
       selectedId,
       agentCwd,
-      gitSummary,
       findById,
       findByPath,
       resolveProject,

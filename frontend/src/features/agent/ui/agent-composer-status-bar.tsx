@@ -1,27 +1,17 @@
 "use client";
 
 import { formatTokenCount } from "@/features/agent/messages";
-import type { GitSummary } from "@/features/agent/projects/types";
-import { GitBranchIcon } from "@/ui/icons";
 
 export function AgentComposerStatusBar({
   cwd,
-  gitBranch,
-  gitSummary,
-  onInitGit,
   currentContextTokens,
   contextWindow,
   onOpenStatus,
-  onOpenDiff,
 }: {
   cwd: string;
-  gitBranch?: string | null;
-  gitSummary?: GitSummary | null;
-  onInitGit?: () => void;
   currentContextTokens: number;
   contextWindow: number;
   onOpenStatus: () => void;
-  onOpenDiff: () => void;
 }) {
   const displayCwd = formatHomeRelativePath(cwd);
 
@@ -35,8 +25,6 @@ export function AgentComposerStatusBar({
             </span>
           ) : null}
         </div>
-        <GitBranchState gitBranch={gitBranch} gitSummary={gitSummary} onInitGit={onInitGit} />
-        <GitSummaryState gitSummary={gitSummary} onOpenDiff={onOpenDiff} />
       </div>
       <ContextReadout
         current={currentContextTokens}
@@ -44,66 +32,6 @@ export function AgentComposerStatusBar({
         onClick={onOpenStatus}
       />
     </div>
-  );
-}
-
-function GitBranchState({
-  gitBranch,
-  gitSummary,
-  onInitGit,
-}: {
-  gitBranch?: string | null;
-  gitSummary?: GitSummary | null;
-  onInitGit?: () => void;
-}) {
-  if (gitBranch) {
-    return (
-      <span className="inline-flex min-w-0 shrink items-center gap-1 text-(--dim)">
-        <GitBranchIcon className="h-3 w-3 shrink-0" />
-        <span className="truncate">{gitBranch}</span>
-      </span>
-    );
-  }
-
-  if (gitSummary && !gitSummary.isRepo) {
-    return (
-      <button
-        type="button"
-        onClick={onInitGit}
-        className="inline-flex shrink-0 items-center gap-1 text-(--dim) hover:text-(--fg)"
-        title="Init git"
-      >
-        <GitBranchIcon className="h-3 w-3" />
-        git
-      </button>
-    );
-  }
-
-  return null;
-}
-
-function GitSummaryState({
-  gitSummary,
-  onOpenDiff,
-}: {
-  gitSummary?: GitSummary | null;
-  onOpenDiff: () => void;
-}) {
-  if (!gitSummary?.isRepo) return null;
-
-  return (
-    <button
-      type="button"
-      onClick={onOpenDiff}
-      className="inline-flex shrink-0 items-center gap-1 rounded-sm px-1 transition-colors hover:bg-(--fg)/[0.05]"
-      title="View changes"
-    >
-      <span className="text-(--ok)">+{gitSummary.additions}</span>
-      <span className="text-(--err)">-{gitSummary.deletions}</span>
-      {gitSummary.statusCount > 0 ? (
-        <span className="text-(--dim)">· {gitSummary.statusCount} files</span>
-      ) : null}
-    </button>
   );
 }
 
