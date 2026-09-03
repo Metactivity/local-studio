@@ -201,6 +201,30 @@ an unconfigured ACE answers 503 with `aceStatus().problems`.
 
 Tests: `test/ace-handlers.test.ts` (status shape, accept/reject round trip on a temp store, lens of a scripted turn).
 
+## IDE Bridge (ADR-034 M5)
+
+The embedded Tuum workbench (reh-web on the Spark) talks to this runtime over a Unix socket, newline-delimited
+JSON-RPC 2.0, contract `@metactivity/protocol` `ide.ts` (`protocolVersion` 1). Code: `src/ide-bridge/`
+(`server.ts` socket + sessions, `context.ts` latest editor state per folder + the `<ide-context>` block,
+`ace-endpoint.ts` the `ace/*` methods served by the process-wide `NativeService`), `src/tools/ide.ts` (the
+`ide_*` harness tools), `src/http/ide-handlers.ts` (`GET /api/agent/ide/context?cwd=`).
+
+| Piece | Behaviour |
+| --- | --- |
+| Socket | `IDE_BRIDGE_SOCKET`, default `<data dir>/ide-bridge.sock`, mode 600, a stale file is unlinked at boot; the `ace-agent` extension connects out with `TUUM_BRIDGE_SOCKET` set to the same path (`/etc/ai/tuum-web.env` on the Spark) and `TUUM_ACE_MODE=bridge` |
+| Handshake | `ide.hello {sessionId, folder, extensionVersion, protocolVersion}` → `{protocolVersion, runtimeVersion}`; `folder` must pass `WORKSPACE_ROOTS`; one connection per folder (a new hello replaces the old); `ide.heartbeat` every 15 s, the runtime closes after 45 s of silence |
+| Events (IDE → runtime) | `ide.workspace.changed`, `ide.editor.active`, `ide.editor.tabs`, `ide.document.saved`, `ide.diagnostics.changed`, `ide.scm.changed`, `ide.search.results` fold into the per-folder context; the next turn gets a bounded `<ide-context>` block (≤ 1 500 chars: active file + selection, diagnostics totals, git branch/changes, tabs, last save) beside `<ace-context>` |
+| Actions (runtime → IDE) | `ide.openFile`, `ide.readFile`, `ide.searchWorkspace`, `ide.symbols`, `ide.references`, `ide.reveal`, `ide.showDiff`, `ide.getDiagnostics` — exposed to the model as `ide_open_file`, `ide_read_file`, `ide_search`, `ide_symbols`, `ide_references`, `ide_reveal`, `ide_show_diff`, `ide_diagnostics`, added to the tool list per turn only while an IDE is connected for the session folder (read access under every permission profile); 10 s timeout (30 s for search) |
+| ACE over the bridge | `ace/getStatus`, `ace/prepareTask`, `ace/retrieveRelevantContext`, `ace/listProposals`, `ace/resolveProposal`, `ace/observeAgentEvent` (notification) — the extension's AcePort on the single ACE this runtime owns |
+| Panel | `GET /api/agent/ide/context?cwd=` → `{connected, context, totals}` for the Context tab chips and the "IDE connected" pill |
+
+Degradation: no socket listener → logged at boot, everything else runs; no IDE for a folder → no `ide_*` tools,
+no `<ide-context>`; an action that times out or hits a disconnected IDE returns a tool failure, the turn goes on.
+M6/M7 add the write actions (`applyEdit`, `fs.*`, `runTerminal`, `runCommand`) and `ide.terminal.output`.
+
+Tests: `test/ide-bridge.test.ts` (fake extension client: hello/ack, event → context, action round trip, timeout,
+context block bound, `ide_*` tools only while connected).
+
 ## Environment
 
 | Variable                                   | Default                                       | Role                                                                                                |

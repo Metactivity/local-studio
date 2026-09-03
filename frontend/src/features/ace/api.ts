@@ -109,6 +109,37 @@ export const loadAceLens = (sessionId: string, piSessionId: string | null) => {
   );
 };
 
+export type IdeContextReport = {
+  connected: boolean;
+  socketPath: string;
+  context: {
+    sessionId: string;
+    extensionVersion: string;
+    connectedAt: string;
+    updatedAt: string;
+    activeEditor: {
+      uri: string;
+      languageId: string;
+      selection: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+    } | null;
+    tabs: string[];
+    lastSaved: string | null;
+    scm: {
+      branch: string | null;
+      ahead: number;
+      behind: number;
+      changes: { uri: string; status: string }[];
+    } | null;
+  } | null;
+  totals: { errors: number; warnings: number; files: number } | null;
+};
+
+export const loadIdeContext = (cwd: string) =>
+  call<IdeContextReport>(withCwd("/api/agent/ide/context", cwd));
+
 export const rebuildAceGraph = (cwd: string) =>
   post<{ indexedFiles: number; pendingFiles: number }>("/api/agent/ace/rebuild-graph", { cwd });
 
