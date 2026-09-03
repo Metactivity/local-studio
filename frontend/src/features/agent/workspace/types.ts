@@ -10,8 +10,6 @@ export type { AgentModel } from "@/features/agent/models";
 
 export type WorkspaceLayout = Layout;
 
-export type { GitSummary } from "@/features/agent/projects/types";
-
 export type ChatPaneState = {
   kind?: "chat";
   sessionId: SessionId;

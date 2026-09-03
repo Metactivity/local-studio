@@ -9,7 +9,7 @@ import {
 } from "@/features/agent/ui/quick-panel/quick-panel-top-bar";
 import { CloseIcon, PlusIcon } from "@/ui/icons";
 import type { WorkspaceDispatch } from "@/features/agent/workspace/effects";
-import type { AgentModel, WorkspaceState } from "@/features/agent/workspace/types";
+import type { WorkspaceState } from "@/features/agent/workspace/types";
 import { useProjects, type ProjectsContextValue } from "@/features/agent/projects/context";
 import { useTools } from "@/features/agent/tools/context";
 import type { Project } from "@/features/agent/projects/types";
@@ -92,9 +92,6 @@ export function AgentWorkspaceShell({
     ...activeSessionIdentity,
     setActiveComputerSession: tools.setActiveComputerSession,
   });
-  const focusedModel =
-    state.models.find((model) => model.id === (focusedTab?.modelId ?? state.selectedModel)) ?? null;
-  const focusedGitSummary = projects.gitSummary(activeProject?.path ?? focusedTab?.cwd);
   const showProjectEmptyState = shouldShowProjectEmptyState(projects, projectParam);
   const focusedMessageCount = focusedTab?.messages.length ?? 0;
   const panelMode = quickPanelMode(compact, showProjectEmptyState, focusedMessageCount);
