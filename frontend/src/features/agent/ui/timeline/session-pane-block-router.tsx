@@ -6,6 +6,7 @@ import { AssistantActivityGroup } from "@/features/agent/ui/timeline/assistant-a
 import { AssistantMessageActions } from "@/features/agent/ui/timeline/assistant-message-actions";
 import { UserMessage } from "@/features/agent/ui/timeline/user-message-block";
 import { SubagentRow } from "@/features/agent/ui/timeline/subagent-row";
+import { TuumResponseAttribution } from "@/ui/tuum";
 import {
   assistantContentCopyText,
   groupAssistantBlocks,
@@ -137,10 +138,7 @@ function SessionPaneBlockRouterInner({
         onForkSession={onForkSession}
       />
       {!live && message.model ? (
-        <p className="mt-1 font-mono text-[length:var(--fs-xs)] text-(--fg)/40">
-          {message.model}
-          {message.timestamp ? ` · ${message.timestamp}` : ""}
-        </p>
+        <TuumResponseAttribution model={message.model} timestamp={message.timestamp} />
       ) : null}
     </>
   );

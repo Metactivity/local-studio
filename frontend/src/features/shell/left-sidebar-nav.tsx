@@ -2,22 +2,25 @@
 
 import Link from "next/link";
 import { type ComponentType, type MouseEvent, type ReactNode } from "react";
-import { Activity, Code, Layers, Plus, Zap } from "@/ui/icon-registry";
+import { Activity, Plus } from "@/ui/icon-registry";
+import { TUUM } from "@/lib/tuum-identity";
+import { tuumIcon } from "@/ui/tuum-icon";
 
 export type IconComponent = ComponentType<{ className?: string; strokeWidth?: number }>;
 
+// Kit product icons where one maps; Lucide (Activity, Settings) otherwise.
 export const tabs = [
-  { href: "/ide", label: "IDE", icon: Code },
+  { href: "/ide", label: "IDE", icon: tuumIcon("worktree") },
   { href: "/", label: "Status", icon: Activity },
-  { href: "/models", label: "Models", icon: Layers },
-  { href: "/agent/automations", label: "Automations", icon: Zap },
+  { href: "/models", label: "Models", icon: tuumIcon("local-runtime") },
+  { href: "/agent/automations", label: "Automations", icon: tuumIcon("orchestration") },
 ];
 
 export function mobilePageTitle(pathname: string): string {
   if (pathname.startsWith("/agent/automations")) return "Automations";
   if (pathname.startsWith("/settings")) return "Settings";
   const tab = tabs.find((entry) => isRouteActive(pathname, entry.href));
-  return tab?.label ?? "Local Studio";
+  return tab?.label ?? TUUM.name;
 }
 
 export function isRouteActive(pathname: string, href: string): boolean {
