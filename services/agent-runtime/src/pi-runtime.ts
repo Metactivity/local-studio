@@ -13,6 +13,8 @@ import {
   type ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
 import { Effect } from "effect";
+import { agentCore } from "./agent-core";
+import { HarnessSession } from "./harness-runtime";
 import { scaleCompactionForLocalModels } from "./pi-compaction";
 import type { AgentImageInput } from "../../../shared/agent/agent-image-input";
 import type { AgentQueueAction } from "../../../shared/agent/agent-turn";
@@ -750,7 +752,8 @@ class PiRuntimeManager {
     const existing = this.sessions.get(sessionId);
     if (existing) return existing;
 
-    const created = new PiSdkSession();
+    const created: PiAgentSession =
+      agentCore() === "harness" ? new HarnessSession() : new PiSdkSession();
     attachGoalDriver(created);
     this.sessions.set(sessionId, created);
     return created;
