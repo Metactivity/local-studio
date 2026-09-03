@@ -3,7 +3,6 @@ import {
   handleAgentAbort,
   handleAgentCompact,
   handleAgentTurn,
-  handleExtensionUiResponse,
   handleRuntimeEvents,
   handleRuntimeSessions,
   handleRuntimeStatus,
@@ -138,7 +137,10 @@ export function createAgentRuntimeApp() {
   app.post("/api/agent/turn", (c) => handleAgentTurn(c.req.raw));
   app.post("/api/agent/abort", (c) => handleAgentAbort(c.req.raw));
   app.post("/api/agent/compact", (c) => handleAgentCompact(c.req.raw));
-  app.post("/api/agent/runtime/extension-ui", (c) => handleExtensionUiResponse(c.req.raw));
+  // Interactive extension dialogs left with the pi extensions; no built-in tool
+  // asks the user anything mid-turn. The route stays so an older client's
+  // reply is a no-op rather than a 404.
+  app.post("/api/agent/runtime/extension-ui", (c) => c.body(null, 204));
   app.get("/api/agent/runtime/sessions", () => handleRuntimeSessions());
   app.get("/api/agent/runtime/status", (c) => handleRuntimeStatus(c.req.raw));
   app.get("/api/agent/runtime/events", (c) => handleRuntimeEvents(c.req.raw));

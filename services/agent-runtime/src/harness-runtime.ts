@@ -1,14 +1,14 @@
-// The harness core behind the runtime manager (LOCAL_STUDIO_AGENT_CORE=harness):
-// the PiAgentSession contract on the ACE-rooted vendored Agent
-// (src/ace/ace-harness.ts) with the SQLite session store.
+// The agent core behind the runtime manager: the PiAgentSession contract the
+// http handlers call, on the ACE-rooted vendored Agent (src/ace/ace-harness.ts)
+// with the SQLite session store.
 //
 // Wire compatibility: the vendored loop already emits the pi event shapes the
 // frontend renders (agent_start/end, message_start/update/end,
-// tool_execution_*), so they go out untouched. This file adds the
-// pi-coding-agent-only events the SSE and the UI rely on — `agent_settled`
-// (closes the stream), `queue_update` (steer / follow-up queue), and
-// `compaction_end` (history summary) — and reports a turn failure as a
-// `notice`. See docs/ace-harness.md, "Wire compatibility".
+// tool_execution_*), so they go out untouched. This file adds the events the
+// SSE and the UI rely on that the former pi-coding-agent driver synthesized —
+// `agent_settled` (closes the stream), `queue_update` (steer / follow-up
+// queue), and `compaction_end` (history summary) — and reports a turn failure
+// as a `notice`. See docs/ace-harness.md, "Wire compatibility".
 
 import { EventEmitter } from "node:events";
 import { Effect } from "effect";
@@ -45,14 +45,74 @@ import {
   type RuntimeStartOptions,
 } from "./pi-runtime-helpers";
 import { refreshPiModels, selectPiRuntimeModel, toPiThinkingLevel } from "./pi-runtime-models";
-import type { LoggedPiEvent, PiAgentSession, PiAgentStatus, PiPromptOptions } from "./pi-runtime-types";
 import { notifySessionListChanged } from "./session-list-changed";
 import { getApiSettings } from "./settings-service";
 import { builtinTools, type ToolContext, withAgentPolicy, withTimeoutPolicy } from "./tools";
 import type { AgentImageInput } from "../../../shared/agent/agent-image-input";
 import type { AgentQueueAction } from "../../../shared/agent/agent-turn";
+import type { RuntimeContextUsage } from "../../../shared/agent/context-usage";
 
-type PiEvent = LoggedPiEvent["event"];
+export type { RuntimeStartOptions };
+
+// The event surface the rest of the app sees. Consumers duck-type on string
+// event names (`sessions/engine.ts`, `pane-controller.ts`, …), hence the loose
+// index signature.
+type PiEvent = Record<string, unknown> & { type?: string };
+
+export type LoggedPiEvent = {
+  seq: number;
+  event: PiEvent;
+  timestamp: string;
+};
+
+export type PiPromptOptions = {
+  streamingBehavior?: "steer" | "followUp";
+  images?: AgentImageInput[];
+};
+
+export type PiAgentStatus = {
+  running: boolean;
+  active: boolean;
+  modelId: string;
+  cwd: string;
+  piSessionId: string | null;
+  agentDir: string;
+  eventSeq: number;
+  lastError: string | null;
+  contextUsage: RuntimeContextUsage | null;
+};
+
+/** The session contract the http handlers, the goal driver and the scheduler drive. */
+export interface PiAgentSession {
+  ensureStarted(
+    modelId: string,
+    cwd?: string,
+    piSessionId?: string | null,
+    options?: RuntimeStartOptions,
+  ): Promise<void>;
+  prompt(
+    message: string,
+    onEvent: (event: PiEvent, seq: number) => void,
+    options?: PiPromptOptions,
+  ): Promise<void>;
+  steer(message: string, images?: AgentImageInput[]): Promise<void>;
+  mutateQueuedFollowUp(
+    message: string,
+    action: AgentQueueAction,
+    replacement?: string,
+    images?: AgentImageInput[],
+  ): Promise<void>;
+  followUp(message: string, images?: AgentImageInput[]): Promise<void>;
+  /** Resolves with the messages that were still queued, so the caller can
+   *  restore them rather than losing them to the stop. */
+  abort(): Promise<{ steering: string[]; followUp: string[] }>;
+  compact(customInstructions?: string): Promise<unknown>;
+  stop(): Promise<void>;
+  readonly status: PiAgentStatus;
+  getEventsAfter(seq: number): LoggedPiEvent[];
+  onLoggedEvent(listener: (event: LoggedPiEvent) => void): () => void;
+  adoptPiSessionId(piSessionId: string | null | undefined): void;
+}
 
 const EVENT_LOG_CAP = 2_000;
 
@@ -406,10 +466,6 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
     await harness.agent.waitForIdle().catch(() => undefined);
     this.recordQueueUpdate();
     return cleared;
-  }
-
-  respondExtensionUi(): boolean {
-    return false;
   }
 
   async stop(): Promise<void> {

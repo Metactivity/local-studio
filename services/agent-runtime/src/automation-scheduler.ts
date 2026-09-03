@@ -8,7 +8,7 @@ import {
   type Automation,
 } from "./automations-store";
 import { getGlobalSingleton } from "./instances";
-import { piRuntimeManager } from "./pi-runtime";
+import { piRuntimeManager } from "./runtime-manager";
 import { harnessSessions } from "./harness-sessions";
 import { lastAssistantResult } from "./session-text";
 import { listProjectsFromStore } from "./projects-store";

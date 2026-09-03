@@ -1,30 +1,17 @@
 //
 // Server-side session-goal injection.
 //
-// `/goal <objective>` stores an objective per pi session; goal-driver.ts
-// re-prompts the agent whenever it settles. But on a turn the user types
-// themselves the model never saw the objective, so the goal only nudged the
-// session between turns instead of steering it.
-//
-// The old fix was a bundled pi extension (goal.ts) that read the goal off disk
-// inside `before_agent_start`. It relied on `ctx.sessionManager.getSessionId()`
-// to key the read — but extensions bind over RPC and that id does NOT match the
-// canonical piSessionId the goal store is keyed by (a live breadcrumb showed a
-// different id on every before_agent_start, so the goal was always null and the
-// section never reached the model).
-//
-// This module moves the injection in-process. pi-runtime registers the factory
-// below as an `extensionFactories` entry on the session's resource loader; the
-// closure captures the runtime's own SessionManager, so it reads the goal with
-// the SAME canonical piSessionId the store writes. `before_agent_start` fires
-// once per prompt (SDK: agent-session.js emits it in _prompt, and the returned
-// systemPrompt overrides that turn only), so reading the goal live inside the
-// handler picks up mid-session edits and budget/turn changes.
+// `/goal <objective>` stores an objective per session; goal-driver.ts
+// re-prompts the agent whenever it settles. On a turn the user types
+// themselves the model would never see the objective, so the harness driver
+// registers `goalSystemContext` as a transform_context contribution
+// (src/harness-runtime.ts): it runs once per prompt and reads the goal live,
+// keyed by the same canonical session id the store writes, so mid-session
+// edits and budget/turn changes land on the next turn.
 //
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { resolveDataDir } from "./data-dir";
 
 const MARKER = "Local Studio session goal:";
@@ -86,8 +73,8 @@ export function goalSystemPromptSection(goal: GoalPromptInput): string | null {
 }
 
 /** goals-store keys files as <dataDir>/goals/<piSessionId>.json (see
- *  session-json-store). readGoal there is async; the before_agent_start hook
- *  needs a synchronous read, so mirror the same path + id rules here. */
+ *  session-json-store). readGoal there is async; the per-turn hook needs a
+ *  synchronous read, so mirror the same path + id rules here. */
 function goalFilePath(piSessionId: string): string | null {
   const id = piSessionId.trim();
   if (!id || !/^[a-zA-Z0-9_.:-]{1,128}$/.test(id)) return null;
@@ -111,27 +98,4 @@ export function readGoalSync(piSessionId: string): GoalPromptInput | null {
 export function goalSystemContext(piSessionId: string): string | null {
   const goal = readGoalSync(piSessionId);
   return goal ? goalSystemPromptSection(goal) : null;
-}
-
-/** Append the steering section for `piSessionId` to `systemPrompt`, or return
- *  null when there is nothing to add (no goal, non-steering status, or the
- *  section is already present — chained overrides could re-run this). */
-export function appendGoalSystemPrompt(systemPrompt: string, piSessionId: string): string | null {
-  const section = goalSystemContext(piSessionId);
-  if (!section || systemPrompt.includes(MARKER)) return null;
-  return `${systemPrompt.trimEnd()}\n\n${section}`;
-}
-
-/** Build the in-process extension factory. `getPiSessionId` is evaluated per
- *  turn (inside before_agent_start), so it always reflects the runtime's live
- *  canonical id even if the session was resumed or adopted a new id. */
-export function createGoalPromptExtension(getPiSessionId: () => string | null) {
-  return (pi: ExtensionAPI): void => {
-    pi.on("before_agent_start", (event) => {
-      const piSessionId = getPiSessionId();
-      if (!piSessionId) return {};
-      const next = appendGoalSystemPrompt(event.systemPrompt, piSessionId);
-      return next ? { systemPrompt: next } : {};
-    });
-  };
 }

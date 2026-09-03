@@ -1,9 +1,11 @@
 import { serve } from "@hono/node-server";
+import { agentCore } from "./agent-core";
 import { startAutomationScheduler } from "./automation-scheduler";
 import "./harness";
 import { createAgentRuntimeApp } from "./http/app";
 import { createSessionListWatcher } from "./session-list-watcher";
 
+agentCore();
 startAutomationScheduler();
 
 const { app } = createAgentRuntimeApp();
