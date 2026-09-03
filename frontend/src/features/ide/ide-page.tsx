@@ -32,7 +32,7 @@ export function IdePage({ ideOrigin }: { ideOrigin: string }) {
   return (
     <div className="grid h-full min-h-0 w-full grid-cols-[minmax(0,1fr)_clamp(380px,26vw,480px)] bg-(--agent-bg) text-(--fg)">
       <div className="min-h-0 min-w-0">
-        {folder ? (
+        {loaded && folder ? (
           <iframe
             key={folder}
             src={ideWorkbenchUrl(ideOrigin, folder, themeId)}
