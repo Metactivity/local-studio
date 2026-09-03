@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./node": "./src/node.ts",
-    "./session/testing": "./src/harness/session/testing/index.ts"
+    "./session/testing": "./src/harness/session/testing/index.ts",
+    "./session/state": "./src/harness/session/state.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.3",

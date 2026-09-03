@@ -1,2 +1,5 @@
 [install]
 linker = "hoisted"
+
+[install.scopes]
+"@metactivity" = { url = "https://npm.pkg.github.com", token = "$NODE_AUTH_TOKEN" }

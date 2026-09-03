@@ -76,6 +76,8 @@ jobs:
       - name: Install dependencies
         working-directory: ./services/agent-runtime
         run: bun install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
       - name: Install shared contract dependencies
         working-directory: ./shared
         run: bun install --frozen-lockfile
