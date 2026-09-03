@@ -1,13 +1,13 @@
 {
   "id": "/",
-  "name": "Local Studio",
-  "short_name": "Local Studio",
-  "description": "Model management for vLLM and SGLang inference servers",
+  "name": "Tuum",
+  "short_name": "Tuum",
+  "description": "Local-first Agentic Development",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#1a1917",
-  "theme_color": "#1a1917",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
   "orientation": "portrait-primary",
   "icons": [
     {

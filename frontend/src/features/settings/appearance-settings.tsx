@@ -24,8 +24,8 @@ import {
 import { SettingsButton, SettingsGroup, SettingsRow } from "./settings-ui";
 
 const CUSTOM_THEME_TOKEN_KEY = "local-studio.customThemeTokens";
-const LIGHT_THEME_ID = "zai-light";
-const DARK_THEME_ID = "zai-dark";
+const LIGHT_THEME_ID = "tuum-light";
+const DARK_THEME_ID = "tuum-dark";
 
 type ThemeMode = "light" | "dark" | "system";
 
