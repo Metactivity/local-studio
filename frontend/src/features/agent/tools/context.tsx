@@ -26,8 +26,6 @@ import {
   type ComputerState,
   type ComputerTab,
   type ContextAttachRequest,
-  type FileOpenRequest,
-  type SessionPreviewRequest,
   type ToolSelection,
   type ToolSelectionMap,
 } from "@/features/agent/tools/types";
@@ -71,14 +69,7 @@ type ToolsActions = {
   closeComputerTab: (tab: ComputerTab) => void;
   setComputerWidth: (width: number) => void;
   setActiveComputerSession: (identity: SessionViewIdentity | null) => void;
-  requestFileOpen: (path: string) => void;
   requestContextAttach: (request: { label: string; path?: string; content: string }) => void;
-  /** Open an existing session (a subagent's, typically) in the right panel. */
-  requestSessionPreview: (request: {
-    piSessionId: string;
-    title: string;
-    cwd: string | null;
-  }) => void;
   /**
    * Replace the entire selection for a session. Pass `null` to clear it (used
    * when a session is closed / pruned).
@@ -88,9 +79,7 @@ type ToolsActions = {
 };
 
 type ToolSelectionsValue = {
-  fileOpenRequest: FileOpenRequest | null;
   contextAttachRequest: ContextAttachRequest | null;
-  sessionPreviewRequest: SessionPreviewRequest | null;
   skillCatalogue: ComposerSkillRef[];
   promptTemplateCatalogue: ComposerPromptTemplateRef[];
   selectionFor: (sessionId: SessionId | null | undefined) => ToolSelection;
@@ -175,11 +164,7 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
   const [browser, setBrowser] = useState<BrowserState>(() => buildInitialBrowser());
   const [computer, setComputer] = useState<ComputerState>(() => buildInitialComputer());
   const activeComputerSessionRef = useRef<SessionViewIdentity | null>(null);
-  const [fileOpenRequest, setFileOpenRequest] = useState<FileOpenRequest | null>(null);
   const [contextAttachRequest, setContextAttachRequest] = useState<ContextAttachRequest | null>(
-    null,
-  );
-  const [sessionPreviewRequest, setSessionPreviewRequest] = useState<SessionPreviewRequest | null>(
     null,
   );
   const [skillCatalogue, setSkillCatalogue] = useState<ComposerSkillRef[]>([]);
@@ -354,36 +339,6 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const requestFileOpen = useCallback(
-    (path: string) => {
-      const clean = path.trim();
-      if (!clean) return;
-      updateComputer((current) => ({ ...current, open: true, tab: "files" }));
-      writeComputerTab("files");
-      setFileOpenRequest((current) => ({
-        id: (current?.id ?? 0) + 1,
-        path: clean,
-      }));
-    },
-    [updateComputer],
-  );
-
-  const requestSessionPreview = useCallback(
-    (request: { piSessionId: string; title: string; cwd: string | null }) => {
-      const piSessionId = request.piSessionId.trim();
-      if (!piSessionId) return;
-      updateComputer((current) => ({ ...current, open: true, tab: "side-chat" }));
-      writeComputerTab("side-chat");
-      setSessionPreviewRequest((current) => ({
-        id: (current?.id ?? 0) + 1,
-        piSessionId,
-        title: request.title.trim() || "Session",
-        cwd: request.cwd,
-      }));
-    },
-    [updateComputer],
-  );
-
   const requestContextAttach = useCallback(
     (request: { label: string; path?: string; content: string }) => {
       const content = request.content.trim();
@@ -463,9 +418,7 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
       closeComputerTab,
       setComputerWidth,
       setActiveComputerSession,
-      requestFileOpen,
       requestContextAttach,
-      requestSessionPreview,
       setSelection,
       hydrateSelections,
     }),
@@ -483,9 +436,7 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
       closeComputerTab,
       setComputerWidth,
       setActiveComputerSession,
-      requestFileOpen,
       requestContextAttach,
-      requestSessionPreview,
       setSelection,
       hydrateSelections,
     ],
@@ -493,21 +444,12 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
 
   const selections = useMemo<ToolSelectionsValue>(
     () => ({
-      fileOpenRequest,
       contextAttachRequest,
-      sessionPreviewRequest,
       skillCatalogue,
       promptTemplateCatalogue,
       selectionFor,
     }),
-    [
-      fileOpenRequest,
-      contextAttachRequest,
-      sessionPreviewRequest,
-      skillCatalogue,
-      promptTemplateCatalogue,
-      selectionFor,
-    ],
+    [contextAttachRequest, skillCatalogue, promptTemplateCatalogue, selectionFor],
   );
 
   // Latest-value ref for imperative readers (use-workspace's event handlers).

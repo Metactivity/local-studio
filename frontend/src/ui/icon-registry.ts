@@ -20,7 +20,6 @@ export {
   StopIcon,
   FileIcon,
   GlobeIcon,
-  GitBranchIcon,
   UserBrowserIcon,
   PanelIcon,
   MoreIcon,

@@ -15,15 +15,7 @@ import type { SessionId } from "@/features/agent/runtime/types";
 // Single source of truth for the right-sidebar tab ids. The `ComputerTab`
 // union is derived from this list, and persistence validates against it, so a
 // new tab only needs to be added here (plus its panel + label in the UI).
-export const COMPUTER_TAB_IDS = [
-  "status",
-  "tools",
-  "side-chat",
-  "browser",
-  "files",
-  "diff",
-  "terminal",
-] as const;
+export const COMPUTER_TAB_IDS = ["status", "tools", "side-chat", "browser"] as const;
 
 export type ComputerTab = (typeof COMPUTER_TAB_IDS)[number];
 
@@ -46,11 +38,7 @@ export type ComputerState = {
   width: number;
 };
 
-export type FileOpenRequest = {
-  id: number;
-  path: string;
-};
-
+/** Id-stamped so the consumer reacts to a changed id, never to a re-render. */
 export type ContextAttachRequest = {
   id: number;
   /** Short label shown on the composer chip (e.g. the file name). */
@@ -59,17 +47,6 @@ export type ContextAttachRequest = {
   path?: string;
   /** The text injected into the model context. */
   content: string;
-};
-
-/** Ask the right panel to open an existing session (e.g. a subagent's) in its
- *  side-chat pane. Same id-stamped shape as FileOpenRequest: the consumer
- *  reacts to a changed id, never to a re-render. */
-export type SessionPreviewRequest = {
-  id: number;
-  piSessionId: string;
-  title: string;
-  /** The session's working directory — replay needs it to find the log. */
-  cwd: string | null;
 };
 
 export type ToolSelection = {
