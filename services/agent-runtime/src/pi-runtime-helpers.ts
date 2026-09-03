@@ -10,6 +10,7 @@ import { hasObsidianVaultSync, listObsidianVaultsSync } from "./obsidian-vault";
 import { resolveBundledResource } from "./plugin-resources";
 import type {
   AgentBrowserBackend as BrowserBackend,
+  AgentQueueAction,
   AgentThinkingLevel,
   AgentToolAccess,
 } from "../../../shared/agent/agent-turn";
@@ -377,5 +378,51 @@ export function buildAgentSessionOptionsSync(input: AgentSessionOptionsInput): A
     skills: runtimeSkillPaths(options),
     promptTemplatePaths: selectedPromptTemplatePaths(options.promptTemplates ?? []),
     envInjections: runtimeEnvInjections(options, input.processEnv ?? process.env, input.cwd ?? ""),
+  };
+}
+
+// ─── Queued follow-up planning (shared by the pi and harness drivers) ──────
+
+export function comparableQueuedText(text: string): string {
+  const marker = "\n\nUser prompt:\n";
+  const index = text.lastIndexOf(marker);
+  return (index === -1 ? text : text.slice(index + marker.length)).trim();
+}
+
+function takeQueuedFollowUp(
+  followUp: readonly string[],
+  message: string,
+): { selected: string; before: string[]; after: string[] } | null {
+  const exactIndex = followUp.indexOf(message);
+  const target = comparableQueuedText(message);
+  const index =
+    exactIndex >= 0
+      ? exactIndex
+      : followUp.findIndex((candidate) => comparableQueuedText(candidate) === target);
+  if (index < 0) return null;
+  return {
+    selected: followUp[index]!,
+    before: followUp.slice(0, index),
+    after: followUp.slice(index + 1),
+  };
+}
+
+export function planQueuedFollowUpMutation(
+  followUp: readonly string[],
+  message: string,
+  action: AgentQueueAction,
+  replacement?: string,
+): { promoted: string | null; followUp: string[] } | null {
+  const selected = takeQueuedFollowUp(followUp, message);
+  if (!selected) return null;
+  if (action === "replace" && !replacement) {
+    throw new Error("Replacement text is required.");
+  }
+  return {
+    promoted: action === "promote" ? selected.selected : null,
+    followUp:
+      action === "replace"
+        ? [...selected.before, replacement!, ...selected.after]
+        : [...selected.before, ...selected.after],
   };
 }
