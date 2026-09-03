@@ -71,7 +71,7 @@ the fork does not customise. Upstream `docs/`, `README.md`, `CHANGELOG.md`,
 
 ### Added files (not upstream)
 
-`package.json` (workspace manifest), `tsconfig.json` (editor-only; extends the
+`package.json` (workspace manifest; also exposes the `./session/state` subpath so the agent-runtime SQLite session backend can reuse `SessionState` — no `src/` change), `tsconfig.json` (editor-only; extends the
 agent-runtime config with `target: ES2022` because
 `src/harness/session/testing/conformance.ts` uses BigInt literals), this file.
 
