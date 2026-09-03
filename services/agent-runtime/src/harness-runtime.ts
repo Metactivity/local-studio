@@ -30,7 +30,7 @@ import {
   uuidv7,
 } from "@local-studio/harness";
 import { NodeExecutionEnv } from "@local-studio/harness/node";
-import { type AceHarness, createAceHarness, createDefaultTools, DEFAULT_SYSTEM_PROMPT } from "./ace/ace-harness";
+import { type AceHarness, type BeforeToolEvent, createAceHarness, createDefaultTools, DEFAULT_SYSTEM_PROMPT } from "./ace/ace-harness";
 import type { AnyJournalRecord } from "./ace/ace-journal";
 import { aceService, readAceConfig } from "./ace/ace-service";
 import type { ModelProfile } from "./harness/model-profile";
@@ -52,8 +52,11 @@ import { refreshPiModels, selectPiRuntimeModel, toPiThinkingLevel } from "./pi-r
 import { notifySessionListChanged } from "./session-list-changed";
 import { getApiSettings } from "./settings-service";
 import { resolvePiAgentDir } from "./user-plugins";
-import { ideBridge } from "./ide-bridge/server";
+import { classifyToolAccess } from "./ace/ace-gate";
+import { createTurnCheckpoint } from "./ide-bridge/checkpoints";
 import { ideContextBlock } from "./ide-bridge/context";
+import { IdeAwareExecutionEnv } from "./ide-bridge/env";
+import { ideBridge } from "./ide-bridge/server";
 import { builtinTools, type ToolContext, withAgentPolicy, withTimeoutPolicy } from "./tools";
 import { ideTools } from "./tools/ide";
 import type { AgentImageInput } from "../../../shared/agent/agent-image-input";
@@ -247,6 +250,8 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   private queued: { steering: string[]; followUp: string[] } = { steering: [], followUp: [] };
   /** The session's tools without the IDE ones; `ide_*` join per turn while an IDE is connected for the folder. */
   private baseTools: AgentTool[] = [];
+  /** The turn that already has its checkpoint (or its "no git" note). */
+  private checkpointTurnId: string | null = null;
 
   constructor(options: HarnessSessionOptions = {}) {
     super();
@@ -293,7 +298,8 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
     const sessionOptions = buildAgentSessionOptionsSync({ options: startOptions, cwd: resolvedCwd });
     const env = { ...process.env, ...sessionOptions.envInjections };
     const tools = [
-      ...withTimeoutPolicy(createDefaultTools(resolvedCwd, ace), env),
+      // Files open and dirty in the IDE are read and written through the editor (ADR-034 M6, ide-bridge/env.ts).
+      ...withTimeoutPolicy(createDefaultTools(resolvedCwd, ace, new IdeAwareExecutionEnv({ cwd: resolvedCwd })), env),
       ...(await builtinTools({ cwd: resolvedCwd, sessionId, modelId, env, request: this.#request, gates: sessionOptions.toolGates })),
     ];
     const executionEnv = new NodeExecutionEnv({ cwd: resolvedCwd });
@@ -350,6 +356,20 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
         return block ? { systemContext: [block] } : undefined;
       },
       { id: "local-studio-ide" },
+    );
+
+    // One git checkpoint per turn, before its first write (ADR-034 M6); a folder without git is journaled once per turn.
+    harness.hooks.on(
+      "before_tool",
+      (raw) => {
+        const event = raw as BeforeToolEvent;
+        if (this.checkpointTurnId === event.turnId || classifyToolAccess(event.toolCall.name, event.args) === "read") return;
+        this.checkpointTurnId = event.turnId;
+        const checkpoint = createTurnCheckpoint(resolvedCwd, sessionId, `turn ${event.turnId} before ${event.toolCall.name}`);
+        if (checkpoint) harness.aep.emit("checkpoint.created", { checkpointId: checkpoint.id, label: checkpoint.label, gitRef: checkpoint.ref }, event.turnId);
+        else harness.journal.push(event.turnId, "ace.degraded", { where: "checkpoint", error: `${resolvedCwd} is not a git repository — no checkpoint for this turn` });
+      },
+      { id: "local-studio-checkpoint" },
     );
 
     const offLoop = harness.events.on("loop", (event) => this.onLoopEvent(event as PiEvent));

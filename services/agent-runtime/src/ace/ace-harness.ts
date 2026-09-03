@@ -34,6 +34,7 @@ import {
   type CompactionPreparation,
   type CompactionSettings,
   compact,
+  type ExecutionEnv,
   createBashTool,
   createEditTool,
   createFindTool,
@@ -67,7 +68,7 @@ import {
   type RouterVerdict,
 } from "@metactivity/ace";
 import type { ModelProfile } from "../harness/model-profile";
-import { createToolLoopGuard, decideToolCall, loadProjectRules, type PermissionProfile, readPermissionProfile } from "./ace-gate";
+import { askPermission, createToolLoopGuard, decideToolCall, loadProjectRules, type PermissionProfile, readPermissionProfile } from "./ace-gate";
 import { AceJournal, type JournalRecord } from "./ace-journal";
 import { observationOf, phaseReport, textOf } from "./ace-phase";
 import { aceService } from "./ace-service";
@@ -237,8 +238,8 @@ function bindTool<TContext extends object>(tool: AgentHarnessTool<TContext, any,
   } as AgentTool;
 }
 
-export function createDefaultTools(cwd: string, ace: NativeService | null): AgentTool[] {
-  const context: ExecutionToolContext = { env: new NodeExecutionEnv({ cwd }) };
+export function createDefaultTools(cwd: string, ace: NativeService | null, env: ExecutionEnv = new NodeExecutionEnv({ cwd })): AgentTool[] {
+  const context: ExecutionToolContext = { env };
   const tools = [
     bindTool(createReadTool(), context),
     bindTool(createGrepTool(), context),
@@ -447,7 +448,7 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
 
     hooks.on(
       "before_tool",
-      (raw): BeforeToolCallResult | undefined => {
+      async (raw): Promise<BeforeToolCallResult | undefined> => {
         const event = raw as BeforeToolEvent;
         const toolName = event.toolCall.name;
         const loop = loopGuard.observe(toolName, event.args);
@@ -457,13 +458,20 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
           const reason = `ACE: the same ${toolName} call was issued ${loop.count} times in a row — stopping this run. Change approach or ask the user.`;
           return { block: true, terminate: true, reason };
         }
-        if (!decision.allow) {
-          const requestId = uuidv7();
-          aep.emit("permission.requested", { requestId, toolCallId: event.toolCall.id, capability: decision.access === "read" ? "read" : decision.access === "write" ? "write-workspace" : "exec", detail: decision.reason, options: ["deny"] }, event.turnId);
+        if (decision.allow) return undefined;
+        const requestId = uuidv7();
+        const capability = decision.access === "read" ? "read" : decision.access === "write" ? "write-workspace" : "exec";
+        if (!decision.ask) {
+          aep.emit("permission.requested", { requestId, toolCallId: event.toolCall.id, capability, detail: decision.reason, options: ["deny"] }, event.turnId);
           aep.emit("permission.resolved", { requestId, decision: "deny", by: "policy" }, event.turnId);
           return { block: true, reason: decision.reason };
         }
-        return undefined;
+        // The ask path: the turn waits for the panel (POST /api/agent/permissions/:id), an abort or the timeout.
+        aep.emit("permission.requested", { requestId, toolCallId: event.toolCall.id, capability, detail: decision.reason, options: ["allow-once", "deny"] }, event.turnId);
+        const answer = await askPermission({ requestId, cwd, sessionId, toolName, args: event.args, reason: decision.reason, createdAt: new Date().toISOString() }, agent.signal);
+        aep.emit("permission.resolved", { requestId, decision: answer === "allow" ? "allow-once" : "deny", by: "user" }, event.turnId);
+        journal.push(event.turnId, "ace.gate", { toolCallId: event.toolCall.id, toolName, decision: answer === "allow" ? { allow: true, access: decision.access } : { ...decision, reason: `${decision.reason} (denied)` }, loopCount: loop.count });
+        return answer === "allow" ? undefined : { block: true, reason: `${decision.reason} The user denied it.` };
       },
       { id: "ace" },
     );

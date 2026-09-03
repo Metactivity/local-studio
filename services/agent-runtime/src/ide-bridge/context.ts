@@ -16,6 +16,8 @@ export interface IdeContext {
   /** Per-uri summaries, only files with at least one error or warning. */
   diagnostics: Record<string, { errors: number; warnings: number }>;
   scm: IdeEvents["ide.scm.changed"] | null;
+  /** Open documents with unsaved changes (M6): the harness writes to them through the IDE, not the disk. */
+  dirty: string[];
 }
 
 export const IDE_CONTEXT_MAX_CHARS = 1_500;
@@ -32,6 +34,7 @@ export function emptyContext(hello: { sessionId: string; extensionVersion: strin
     lastSaved: null,
     diagnostics: {},
     scm: null,
+    dirty: [],
   };
 }
 
@@ -51,7 +54,14 @@ export function applyIdeEvent(context: IdeContext, method: string, params: unkno
     case "ide.document.saved":
       if (typeof record.uri !== "string") return context;
       next.lastSaved = record.uri;
+      next.dirty = context.dirty.filter((uri) => uri !== record.uri);
       break;
+    case "ide.document.dirty": {
+      if (typeof record.uri !== "string" || typeof record.dirty !== "boolean") return context;
+      const others = context.dirty.filter((uri) => uri !== record.uri);
+      next.dirty = record.dirty ? [...others, record.uri] : others;
+      break;
+    }
     case "ide.diagnostics.changed": {
       const summary = record.summary as { errors?: unknown; warnings?: unknown } | undefined;
       if (typeof record.uri !== "string" || !summary) return context;
@@ -128,6 +138,7 @@ export function ideContextBlock(context: IdeContext, folder: string, maxChars = 
     );
   }
   if (context.tabs.length > 0) lines.push(`- [tabs] ${context.tabs.slice(0, 10).map((uri) => relative(uri, folder)).join(", ")}`);
+  if (context.dirty.length > 0) lines.push(`- [unsaved] ${context.dirty.slice(0, 10).map((uri) => relative(uri, folder)).join(", ")} (edits reach the editor buffer, not the disk)`);
   if (context.lastSaved) lines.push(`- [saved] ${relative(context.lastSaved, folder)}`);
   if (lines.length === 0) return null;
 
