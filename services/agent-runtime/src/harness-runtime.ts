@@ -32,6 +32,7 @@ import { type AceHarness, createAceHarness, createDefaultTools, DEFAULT_SYSTEM_P
 import { aceService, readAceConfig } from "./ace/ace-service";
 import type { ModelProfile } from "./harness/model-profile";
 import { resolveModelProfile } from "./harness/model-profile";
+import { formatProjectContext, loadProjectContextFiles } from "./harness/context-files";
 import { createHarnessModel, createHarnessModels } from "./harness/spark-model";
 import { goalSystemContext } from "./goal-prompt";
 import { harnessSessions, harnessStoreRoot } from "./harness-sessions";
@@ -47,6 +48,7 @@ import {
 import { refreshPiModels, selectPiRuntimeModel, toPiThinkingLevel } from "./pi-runtime-models";
 import { notifySessionListChanged } from "./session-list-changed";
 import { getApiSettings } from "./settings-service";
+import { resolvePiAgentDir } from "./user-plugins";
 import { builtinTools, type ToolContext, withAgentPolicy, withTimeoutPolicy } from "./tools";
 import type { AgentImageInput } from "../../../shared/agent/agent-image-input";
 import type { AgentQueueAction } from "../../../shared/agent/agent-turn";
@@ -119,6 +121,9 @@ const EVENT_LOG_CAP = 2_000;
 /** Appended for vision-capable models, same wording as the pi driver. */
 const VISION_GUIDANCE =
   "When an image is attached, inspect it carefully before answering. State only details visible in the image. Never invent labels, UI elements, text, or facts. Say when details are too small or uncertain. Give a concise answer. Use available tools to inspect supplied files when helpful.";
+
+/** The pi driver's read-only set (read/grep/find/ls) plus ACE's retrieval tool. */
+const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls", "ace_retrieve_context"]);
 
 export interface HarnessEndpoint {
   /** The id the server expects in the request body. */
@@ -286,10 +291,16 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
     const executionEnv = new NodeExecutionEnv({ cwd: resolvedCwd });
     const { skills } = await loadSkills(executionEnv, sessionOptions.skills);
     const { promptTemplates } = await loadPromptTemplates(executionEnv, sessionOptions.promptTemplatePaths);
+    // Same order as pi's system prompt: base, project context files, skills, then the policy; cwd last.
+    const projectContext = formatProjectContext(loadProjectContextFiles(resolvedCwd, resolvePiAgentDir()));
     const systemPrompt = withAgentPolicy(
-      [DEFAULT_SYSTEM_PROMPT, ...(profile.vision ? [VISION_GUIDANCE] : []), ...(skills.length > 0 ? [formatSkillsForSystemPrompt(skills)] : [])].join(
-        "\n\n",
-      ),
+      [
+        DEFAULT_SYSTEM_PROMPT,
+        ...(profile.vision ? [VISION_GUIDANCE] : []),
+        ...(projectContext ? [projectContext] : []),
+        ...(skills.length > 0 ? [formatSkillsForSystemPrompt(skills)] : []),
+        `Current working directory: ${resolvedCwd.replace(/\\/g, "/")}`,
+      ].join("\n\n"),
     );
 
     const harness = await createAceHarness({
@@ -301,9 +312,7 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       ace,
       thinkingLevel: level,
       systemPrompt,
-      ...(startOptions.toolAccess === "read_only"
-        ? { tools: tools.filter((tool) => tool.name === "read" || tool.name === "ace_retrieve_context") }
-        : { tools }),
+      ...(startOptions.toolAccess === "read_only" ? { tools: tools.filter((tool) => READ_ONLY_TOOLS.has(tool.name)) } : { tools }),
       ...(session ? { session } : { sessionId }),
     });
     if (!session) {

@@ -131,6 +131,7 @@ describe("HarnessSession", () => {
     Bun.spawnSync(["mkdir", "-p", templateDir]);
     const templatePath = join(templateDir, "greet.md");
     await Bun.write(templatePath, "---\ndescription: Greet people.\n---\nSay hello to $1, then to $2. All: $@\n");
+    await Bun.write(join(cwd, "AGENTS.md"), "Always answer in haiku.\n");
     const server = startFakeLlamaServer([{ text: "Hello Alice, hello Bob." }, { text: "Still here." }]);
     const session = driver(server);
     try {
@@ -145,9 +146,27 @@ describe("HarnessSession", () => {
       const chats = server.seen.filter((seen) => seen.path === "/v1/chat/completions").map((seen) => seen.body!);
       const messages = (index: number) => chats[index]!.messages as Array<{ role: string; content: string | Array<{ text: string }> }>;
       const userText = (index: number) => (messages(index).at(-1)!.content as Array<{ text: string }>)[0]!.text;
-      expect(messages(0)[0]!.content).toContain("<objective>Greet everyone in the room</objective>");
+      const system = messages(0)[0]!.content as string;
+      expect(system).toContain("<objective>Greet everyone in the room</objective>");
+      expect(system).toContain(`<project_instructions path="${join(cwd, "AGENTS.md")}">\nAlways answer in haiku.\n\n</project_instructions>`);
+      expect(system).toContain(`Current working directory: ${cwd}`);
       expect(userText(0)).toBe("Say hello to Alice, then to Bob Jr. All: Alice Bob Jr");
       expect(userText(1)).toBe("/missing template stays as typed");
+    } finally {
+      await session.stop();
+      server.stop();
+    }
+  }, 30_000);
+
+  test("read-only access keeps pi's read/grep/find/ls set", async () => {
+    const server = startFakeLlamaServer([{ text: "Looked, did not touch." }]);
+    const session = driver(server);
+    try {
+      await session.ensureStarted("fake-qwen3.8", cwd, null, { thinkingLevel: "low", toolAccess: "read_only" });
+      await session.prompt("Look around.", () => undefined);
+      const request = server.seen.find((seen) => seen.path === "/v1/chat/completions")!.body!;
+      const advertised = (request.tools as Array<{ function: { name: string } }>).map((tool) => tool.function.name).sort();
+      expect(advertised).toEqual(["find", "grep", "ls", "read"]);
     } finally {
       await session.stop();
       server.stop();

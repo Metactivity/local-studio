@@ -36,6 +36,9 @@ import {
   compact,
   createBashTool,
   createEditTool,
+  createFindTool,
+  createGrepTool,
+  createLsTool,
   createReadTool,
   createWriteTool,
   DEFAULT_COMPACTION_SETTINGS,
@@ -177,7 +180,7 @@ export interface AceHarnessOptions {
   profile: ModelProfile;
   /** Default: the process-wide service from the environment; `null` runs without ACE. */
   ace?: NativeService | null;
-  /** Default: the vendored read/write/edit/bash bound to `cwd`, plus `ace_retrieve_context`. */
+  /** Default: the vendored read/grep/find/ls/write/edit/bash bound to `cwd`, plus `ace_retrieve_context`. */
   tools?: AgentTool[];
   systemPrompt?: string;
   thinkingLevel?: ThinkingLevel;
@@ -238,6 +241,9 @@ export function createDefaultTools(cwd: string, ace: NativeService | null): Agen
   const context: ExecutionToolContext = { env: new NodeExecutionEnv({ cwd }) };
   const tools = [
     bindTool(createReadTool(), context),
+    bindTool(createGrepTool(), context),
+    bindTool(createFindTool(), context),
+    bindTool(createLsTool(), context),
     bindTool(createWriteTool(), context),
     bindTool(createEditTool(), context),
     bindTool(createBashTool(), context),
