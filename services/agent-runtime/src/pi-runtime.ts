@@ -14,7 +14,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Effect } from "effect";
 import { agentCore } from "./agent-core";
-import { HarnessSession } from "./harness-runtime";
 import { scaleCompactionForLocalModels } from "./pi-compaction";
 import type { AgentImageInput } from "../../../shared/agent/agent-image-input";
 import type { AgentQueueAction } from "../../../shared/agent/agent-turn";
@@ -48,6 +47,12 @@ import type {
 } from "./pi-runtime-types";
 
 type PiEvent = LoggedPiEvent["event"];
+
+// Loaded only under the flag: the harness graph pulls in @metactivity/ace,
+// which node loads only from the bundle (TypeScript sources), so the pi
+// default must not import it.
+const HarnessSession =
+  agentCore() === "harness" ? (await import("./harness-runtime")).HarnessSession : null;
 
 type QueueTransport = {
   steer: (message: string, images?: AgentImageInput[]) => Promise<void>;
@@ -752,8 +757,7 @@ class PiRuntimeManager {
     const existing = this.sessions.get(sessionId);
     if (existing) return existing;
 
-    const created: PiAgentSession =
-      agentCore() === "harness" ? new HarnessSession() : new PiSdkSession();
+    const created: PiAgentSession = HarnessSession ? new HarnessSession() : new PiSdkSession();
     attachGoalDriver(created);
     this.sessions.set(sessionId, created);
     return created;

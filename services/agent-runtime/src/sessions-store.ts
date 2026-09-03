@@ -17,7 +17,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { agentCore } from "./agent-core";
 import { resolveDataDir } from "./data-dir";
-import { harnessSessions } from "./harness-sessions";
 import { expandHome } from "./pi-runtime-helpers";
 import { rolloutCache, statRollout } from "./rollout-cache";
 import { transcriptSource } from "./transcript-sidecar";
@@ -392,12 +391,16 @@ function limitSatisfied(
   return nextMtimeMs < startTimes[limit - 1];
 }
 
-export function listSessions(
+// The harness store is imported lazily: it sits on the @metactivity/ace graph,
+// which node loads only from the bundle.
+const harnessSessions = async () => (await import("./harness-sessions")).harnessSessions();
+
+export async function listSessions(
   cwd: string,
   options: ListSessionsOptions = {},
 ): Promise<SessionSummary[]> {
   return agentCore() === "harness"
-    ? harnessSessions().listSessions(cwd, options)
+    ? (await harnessSessions()).listSessions(cwd, options)
     : listPiSessions(cwd, options);
 }
 
@@ -801,13 +804,13 @@ function readTailRegion(
 // renderer's fold. Without options it reads the whole file (capped); with `tail`
 // it reads only the last N messages from the end of the file, and with `before`
 // it pages to the previous chunk — so a multi-GB log never gets read whole.
-export function loadSession(
+export async function loadSession(
   cwd: string,
   sessionId: string,
   options: LoadSessionOptions = {},
 ): Promise<LoadSessionResult> {
   return agentCore() === "harness"
-    ? harnessSessions().loadSession(cwd, sessionId, options)
+    ? (await harnessSessions()).loadSession(cwd, sessionId, options)
     : loadPiSession(cwd, sessionId, options);
 }
 

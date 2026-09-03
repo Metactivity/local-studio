@@ -7,9 +7,8 @@
 
 import { realpathSync } from "node:fs";
 import path from "node:path";
-import type { Database } from "bun:sqlite";
 import type { Entry } from "@local-studio/harness";
-import { openSessionsDatabase, SqliteSessionRepo } from "./ace/sqlite-session-repo";
+import { type Database, openSessionsDatabase, SqliteSessionRepo } from "./ace/sqlite-session-repo";
 import { resolveDataDir } from "./data-dir";
 import { getGlobalSingleton } from "./instances";
 import { readSessionListMetadata } from "./session-metadata-store";
@@ -97,28 +96,36 @@ export function createHarnessSessionStore(storeRoot: string): HarnessSessionStor
   const db: Database = openSessionsDatabase(path.join(storeRoot, "sessions.db"));
   const repo = new SqliteSessionRepo(db);
 
-  const rowsQuery = db.query<SessionRow, []>("SELECT id, created_at, cwd FROM sessions ORDER BY created_at DESC");
-  const rowQuery = db.query<SessionRow, [string]>("SELECT id, created_at, cwd FROM sessions WHERE id = ?");
+  // node:sqlite statements are untyped; each query names its row shape once here.
+  const prepare = <Row>(sql: string) => {
+    const statement = db.prepare(sql);
+    return {
+      all: (...params: string[]) => statement.all(...params) as unknown as Row[],
+      get: (...params: string[]) => statement.get(...params) as unknown as Row | undefined,
+    };
+  };
+  const rowsQuery = prepare<SessionRow>("SELECT id, created_at, cwd FROM sessions ORDER BY created_at DESC");
+  const rowQuery = prepare<SessionRow>("SELECT id, created_at, cwd FROM sessions WHERE id = ?");
   // ponytail: json_extract scans every mutation of a session per listing; add an
   // entries index / summary columns if the sidebar refresh gets slow.
   const userMessageQuery = (order: "ASC" | "DESC") =>
-    db.query<{ json: string }, [string]>(
+    prepare<{ json: string }>(
       `SELECT json FROM mutations WHERE session_id = ? AND json_extract(json, '$.entry.type') = 'message'
          AND json_extract(json, '$.entry.message.role') = 'user' ORDER BY seq ${order} LIMIT 1`,
     );
   const firstUserQuery = userMessageQuery("ASC");
   const lastUserQuery = userMessageQuery("DESC");
-  const modelQuery = db.query<{ provider: string; model_id: string }, [string]>(
+  const modelQuery = prepare<{ provider: string; model_id: string }>(
     `SELECT json_extract(json, '$.entry.provider') AS provider, json_extract(json, '$.entry.modelId') AS model_id
        FROM mutations WHERE session_id = ? AND json_extract(json, '$.entry.type') = 'model_change' ORDER BY seq DESC LIMIT 1`,
   );
-  const updatedQuery = db.query<{ at: number | null }, [string]>(
+  const updatedQuery = prepare<{ at: number | null }>(
     `SELECT MAX(COALESCE(json_extract(json, '$.entry.timestamp'), json_extract(json, '$.record.timestamp'))) AS at
        FROM mutations WHERE session_id = ?`,
   );
 
-  const userTurn = (row: { json: string } | null) => {
-    if (row === null) return null;
+  const userTurn = (row: { json: string } | undefined) => {
+    if (row === undefined) return null;
     const entry = (JSON.parse(row.json) as { entry: Entry }).entry;
     const text = entry.type === "message" ? userText(entry.message) : null;
     return text === null ? null : { text, at: iso(entry.timestamp) };
@@ -164,7 +171,7 @@ export function createHarnessSessionStore(storeRoot: string): HarnessSessionStor
 
   async function loadSession(cwd: string, sessionId: string, options: LoadSessionOptions = {}): Promise<LoadSessionResult> {
     const row = rowQuery.get(sessionId);
-    if (row === null || !sameCwd(row.cwd, cwd)) return { events: [], cursor: null, meta: null };
+    if (row === undefined || !sameCwd(row.cwd, cwd)) return { events: [], cursor: null, meta: null };
     const session = await repo.open({ id: row.id, createdAt: row.created_at });
     const entries = await session.findEntriesOnBranch({ order: "oldestFirst" });
     const model = modelQuery.get(row.id);
