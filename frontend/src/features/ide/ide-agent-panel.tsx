@@ -9,6 +9,7 @@ import { useState } from "react";
 import { AceContextTab } from "@/features/ace/ace-context-tab";
 import { AceMemoryTab } from "@/features/ace/ace-memory-tab";
 import { AceStatusTab } from "@/features/ace/ace-status-tab";
+import { IdeChangesStrip } from "@/features/ide/ide-changes-strip";
 import { loadAceProposals, loadIdeContext } from "@/features/ace/api";
 import { useAceResource } from "@/features/ace/use-ace-resource";
 import { useProjects } from "@/features/agent/projects/context";
@@ -206,6 +207,13 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
             Select a project to chat about it.
           </div>
         )}
+        {project && piSessionId ? (
+          <IdeChangesStrip
+            cwd={cwd}
+            sessionId={piSessionId}
+            active={focused?.status === "running"}
+          />
+        ) : null}
       </div>
       {tab === "context" ? (
         <AceContextTab sessionId={focused?.id ?? null} piSessionId={piSessionId} cwd={cwd} />
