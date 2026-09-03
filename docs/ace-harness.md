@@ -2,7 +2,8 @@
 
 ADR-033 §2.4 in code: ACE (`@metactivity/ace`) is the context builder, the gate, the tool-result
 compaction and the run-end evaluation of the vendored pi-agent-core loop. Code: `services/agent-runtime/src/ace/`
-and `src/harness/spark-model.ts`. Nothing in `http/` uses it yet (W3).
+and `src/harness/spark-model.ts`. The runtime drives it behind `LOCAL_STUDIO_AGENT_CORE=harness` (W3, below); the
+default core is still the pi-coding-agent SDK.
 
 ## Architecture
 
@@ -40,10 +41,56 @@ effort through `compat.thinkingFormat: "chat-template"` → `chat_template_kwarg
 `thinkingLevelMap` (`high` → `medium`, `max` → `xhigh`, `off` omitted); `supportsReasoningEffort: false` so no
 top-level `reasoning_effort` is sent.
 
+## Runtime driver (`LOCAL_STUDIO_AGENT_CORE=harness`)
+
+`src/harness-runtime.ts` — `HarnessSession` implements the same `PiAgentSession` contract the http handlers call on the
+pi driver (`ensureStarted` / `prompt` / `steer` / `followUp` / `mutateQueuedFollowUp` / `abort` / `compact` / `status` /
+`getEventsAfter` / `onLoggedEvent`), so `http/handlers.ts` and the SSE loop are untouched; `piRuntimeManager` picks the
+class from the flag (`src/agent-core.ts`). Per session: `resolveHarnessEndpoint` maps the composer model id to the
+controller that listed it (`/api/agent/models`), or to `ACE_CHAT_BASE_URL` when the id is not listed; the bearer follows
+the origin (ACE key for the ACE endpoint, settings key for the primary controller). Then `resolveModelProfile` →
+`createHarnessModel` / `createHarnessModels` (pi-ai registry, no `ModelRuntime`) → `createAceHarness` with the process
+ACE service (started once) and the SQLite repo. A `piSessionId` reopens that session (`SqliteSessionRepo.open`); a new
+session gets a `model_change` entry so lists and replays know the model. `toolAccess: "read_only"` keeps `read` and
+`ace_retrieve_context` only. Thinking level → `toPiThinkingLevel` → the profile map (`high` → `medium`, never `high`).
+
+`src/harness-sessions.ts` — the session store the http session handlers read under the flag (`sessions-store.ts`
+dispatches `listSessions` / `loadSession`): summaries from `sessions.db` (first/last user prompt, model, updated-at via
+`json_extract`), archive flags from the same metadata store as pi, and replays as pi-shaped events — one synthesized
+`{type:"session"}` header, then the branch entries (`message`, `compaction`, `model_change`) with `tail` / `before`
+paging on entry `seq`. Session data lives under `ACE_STORE_ROOT`; the pi JSONL store is untouched for `pi`.
+
+Not on this core yet: pi extensions (browser, connectors, github, obsidian, subagents, automations tools), composer
+skills / prompt templates, extension UI prompts (`respondExtensionUi` returns false), goal-driver continuation runs on
+it unchanged. `findSessionFile` / `lastAssistantResult` (automations, subagent results) still read the pi JSONL.
+
+### Wire compatibility
+
+The frontend decodes `{type:"pi", seq, event}` and reads a handful of pi event types (`pi-event-applier.ts`,
+`block-event.ts`, `helpers.ts`, `goal-driver.ts`, the SSE close on `agent_settled`). The vendored loop already emits
+those shapes, so the driver forwards them as is and synthesizes the pi-coding-agent-only ones:
+
+| Source | Event on the wire | Frontend use |
+|---|---|---|
+| loop `agent_start` / `agent_end` | unchanged | run boundaries (goal driver, tool badge settle) |
+| loop `turn_start` / `turn_end` | unchanged | ignored |
+| loop `message_start` / `message_update` / `message_end` | unchanged (`message.role/content/stopReason/errorMessage/usage`, `assistantMessageEvent`) | bubbles, deltas, token stats, steer echo, errors |
+| loop `tool_execution_start` / `_update` / `_end` | unchanged (`toolCallId`, `toolName`, `args`, `result`, `isError`) | tool blocks |
+| harness `prompt()` resolved or rejected | `agent_settled` | SSE `status: done`, session idle |
+| `steer` / `followUp` / queue mutation / abort / queued message injected | `queue_update {steering, followUp}` | queue strip |
+| journal `ace.history-compaction` | `compaction_end {reason: manual\|threshold, result: {summary, tokensBefore}}` | "Context compacted" block, context reset |
+| harness `prompt()` threw | `notice {level: "error", message}` | session error banner |
+| AEP (`turn.*`, `tool.*`, `assistant.*`, `permission.*`, `context.limit`) | not on this wire | ADR-023 SSE (`AepProjector.events()`); a gate denial is visible as the tool result error |
+| journal `ace.router` / `ace.lens` / `ace.gate` / `ace.compaction` / `ace.evaluation` / `ace.reflection` / `ace.degraded` | not on this wire | `harness.journal` (`ace.compaction` must not reach the UI: its name would read as a history compaction) |
+
+Replay (`GET /api/agent/sessions/:id`) is the same vocabulary pi writes: `session` header, `message` entries,
+`compaction` entries (`summary`), `model_change`.
+
 ## Environment
 
 | Variable | Default | Role |
 |---|---|---|
+| `LOCAL_STUDIO_AGENT_CORE` | `pi` | `harness` drives sessions with this file's harness and the SQLite session store |
 | `ACE_RUNTIME_KIND` | `external` | `external` (endpoints below) or `supervised` (ACE's own llama-server) |
 | `ACE_CHAT_BASE_URL` / `ACE_EMBED_BASE_URL` | required for `external` | llama-server origins (`:8000` / `:8001` on the Spark) |
 | `ACE_API_KEY` | — | bearer for both ACE role calls and user turns |
