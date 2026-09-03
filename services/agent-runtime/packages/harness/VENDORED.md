@@ -110,3 +110,5 @@ agent-runtime config with `target: ES2022` because
 ## Cherry-pick log
 
 None yet.
+
+- `tools/grep.ts`: `--sort path` added to the rg invocation so results are deterministic across platforms (rg walk order differs between macOS and Linux; the harness test pins the order).
