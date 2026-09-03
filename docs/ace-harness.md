@@ -220,10 +220,24 @@ JSON-RPC 2.0, contract `@metactivity/protocol` `ide.ts` (`protocolVersion` 1). C
 
 Degradation: no socket listener → logged at boot, everything else runs; no IDE for a folder → no `ide_*` tools,
 no `<ide-context>`; an action that times out or hits a disconnected IDE returns a tool failure, the turn goes on.
-M6/M7 add the write actions (`applyEdit`, `fs.*`, `runTerminal`, `runCommand`) and `ide.terminal.output`.
+M7 adds `runTerminal`, `runTask` and `ide.terminal.output`.
 
 Tests: `test/ide-bridge.test.ts` (fake extension client: hello/ack, event → context, action round trip, timeout,
 context block bound, `ide_*` tools only while connected).
+
+### M6 — edit / diff / apply (MET-929, packages 0.3.0)
+
+| Piece | Behaviour |
+| --- | --- |
+| Write tools | `ide_apply_edit {path, text, range?}`, `ide_apply_patch {unifiedDiff}`, `ide_create_file`, `ide_rename`, `ide_delete`, `ide_run_command {id}` (only the protocol's `IDE_RUN_COMMAND_ALLOWLIST`) → `ide.applyEdit` / `ide.applyPatch` / `ide.fs.*` / `ide.runCommand`; paths must stay inside the session folder (refused before the IDE is asked). Gate class **write** (`IDE_WRITE_TOOLS` in `ace-gate.ts`): Safe blocks, **Standard asks**, Autonomous allows |
+| The ask path | A gate decision with `ask` parks the tool call in `askPermission` (AEP `permission.requested` with `allow-once`/`deny`); the panel answers with `POST /api/agent/permissions/:id {decision}` (`GET /api/agent/permissions?cwd=` lists what waits); an abort or 10 min of silence denies. The plain `edit`/`write` tools keep their M5 classes (Standard auto-accepts them) |
+| Dirty-buffer rule | `ide-bridge/env.ts` (`IdeAwareExecutionEnv`, the env of `read`/`edit`/`write`/…): a file the IDE reports **open and dirty** (`ide.document.dirty`, kept in `context.dirty`) is read through `ide.readFile` and written through `ide.applyEdit` (whole-document replace), so the edit is based on the user's unsaved buffer and never clobbers it; the buffer stays dirty for the user to save. Any other file is read/written on disk as before (the IDE watcher picks it up). `<ide-context>` carries an `[unsaved]` line |
+| Checkpoints | Before the first write of a turn (`before_tool`, class ≠ read — also when the gate then blocks it) the runtime snapshots the worktree with `@metactivity/runtime/git` under `refs/ace-ide/checkpoints/<piSessionId>/<n>` (tracked + untracked, throwaway index; HEAD, index and branch untouched) and emits AEP `checkpoint.created`; a folder without git gets an `ace.degraded {where: "checkpoint"}` journal note instead. `GET /api/agent/checkpoints?cwd=&sessionId=` → `{repo, checkpoints:[{n, commit, ref}], changed}` (paths changed since the last one), `POST /api/agent/checkpoints/revert {cwd, sessionId, n}` restores the whole snapshot (files created after it removed), `POST /api/agent/checkpoints/show {cwd, sessionId, path, mode: open\|diff, n?}` → `ide.openFile` / `ide.showDiff` (left = `git show <commit>:<path>`, right = the current file) |
+| Panel | `frontend/src/features/ide/ide-changes-strip.tsx` under the chat pane: pending asks as Allow/Deny cards, the changed files with Open / Diff, Revert to checkpoint; polled every 2 s while a turn runs |
+
+Tests: `test/ide-write.test.ts` (gate classes + ask registry, dirty → IDE / clean → disk routing, checkpoint
+create/list/diff-content/revert over the HTTP surface, patch tool round trip against the fake extension, a scripted
+turn whose `write` on a dirty buffer goes through `ide.applyEdit` and leaves one checkpoint ref).
 
 ## Environment
 
