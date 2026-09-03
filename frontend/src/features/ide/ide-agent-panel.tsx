@@ -12,6 +12,7 @@ import { AceContextTab } from "@/features/ace/ace-context-tab";
 import { AceMemoryTab } from "@/features/ace/ace-memory-tab";
 import { AceStatusTab } from "@/features/ace/ace-status-tab";
 import { IdeChangesStrip } from "@/features/ide/ide-changes-strip";
+import { providerBadgeState } from "@/features/ide/provider-state";
 import { loadAceProposals, loadIdeContext } from "@/features/ace/api";
 import { useAceResource } from "@/features/ace/use-ace-resource";
 import { useProjects } from "@/features/agent/projects/context";
@@ -29,6 +30,9 @@ import { workspaceNavigationAction } from "@/features/agent/ui/agent-workspace-n
 import { renderWorkspacePane } from "@/features/agent/ui/render-workspace-pane";
 import { useWorkspace } from "@/features/agent/ui/use-workspace";
 import { useMountSubscription } from "@/hooks/use-mount-subscription";
+import { Globe } from "@/ui/icon-registry";
+import { TuumProviderBadge } from "@/ui/tuum";
+import { TuumIcon, type TuumIconName } from "@/ui/tuum-icon";
 import { cx } from "@/ui/utils";
 
 const LazyAgentBrowser = lazy(() =>
@@ -39,12 +43,13 @@ const LazyAgentBrowser = lazy(() =>
 
 type PanelTab = "chat" | "browser" | "context" | "memory" | "ace";
 
-const TABS: { id: PanelTab; label: string }[] = [
-  { id: "chat", label: "Chat" },
-  { id: "browser", label: "Browser" },
-  { id: "context", label: "Context" },
-  { id: "memory", label: "Memory" },
-  { id: "ace", label: "ACE" },
+// Kit product icons where one fits the tab; Lucide for the browser.
+const TABS: { id: PanelTab; label: string; icon: TuumIconName | null }[] = [
+  { id: "chat", label: "Chat", icon: "agent-session" },
+  { id: "browser", label: "Browser", icon: null },
+  { id: "context", label: "Context", icon: "context-lens" },
+  { id: "memory", label: "Memory", icon: "memory" },
+  { id: "ace", label: "ACE", icon: "agentic-context-engine" },
 ];
 
 async function loadRecentSessions(cwd: string): Promise<SessionSummary[]> {
@@ -167,7 +172,7 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
   return (
     <aside className="flex min-h-0 flex-col border-l border-(--border)/60 bg-(--agent-bg)">
       <nav
-        className="flex h-10 shrink-0 items-center gap-1 border-b border-(--border)/60 px-2"
+        className="flex h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-(--border)/60 px-2"
         aria-label="Agent panel"
       >
         {TABS.map((item) => (
@@ -182,6 +187,11 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
               tab === item.id ? "bg-(--active) text-(--fg)" : "text-(--dim) hover:text-(--fg)",
             )}
           >
+            {item.icon ? (
+              <TuumIcon name={item.icon} className="h-3.5 w-3.5 opacity-80" />
+            ) : (
+              <Globe className="h-3.5 w-3.5 opacity-80" strokeWidth={1.6} />
+            )}
             {item.label}
             {item.id === "memory" && pending > 0 ? (
               <span className="rounded-full bg-(--warn)/20 px-1.5 text-[length:var(--fs-xs)] tabular-nums text-(--fg)">
@@ -190,27 +200,6 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
             ) : null}
           </button>
         ))}
-        <span
-          className={cx(
-            "ml-auto rounded-full px-2 py-0.5 text-[length:var(--fs-xs)]",
-            connected ? "bg-(--active) text-(--fg)" : "bg-(--surface-2)/40 text-(--dim)",
-          )}
-        >
-          {connected ? "IDE loaded" : "IDE loading"}
-        </span>
-        <span
-          title={
-            bridged
-              ? "The editor is connected to the agent runtime (IDE bridge)"
-              : "No IDE bridge connection for this folder"
-          }
-          className={cx(
-            "rounded-full px-2 py-0.5 text-[length:var(--fs-xs)]",
-            bridged ? "bg-(--active) text-(--fg)" : "bg-(--surface-2)/40 text-(--dim)",
-          )}
-        >
-          {bridged ? "IDE connected" : "IDE offline"}
-        </span>
       </nav>
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-(--border)/60 px-2">
         <select
@@ -227,6 +216,10 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
             </option>
           ))}
         </select>
+        <TuumProviderBadge
+          state={providerBadgeState(focused ?? null, false)}
+          className="shrink-0"
+        />
         <button
           type="button"
           disabled={!project}
@@ -235,6 +228,31 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
         >
           New
         </button>
+      </div>
+      <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-(--border)/60 px-2">
+        <TuumProviderBadge state={providerBadgeState(focused ?? null, false)} className="min-w-0" />
+        <span className="ml-auto" />
+        <span
+          className={cx(
+            "whitespace-nowrap rounded-full px-2 py-0.5 text-[length:var(--fs-xs)]",
+            connected ? "bg-(--active) text-(--fg)" : "bg-(--surface-2)/40 text-(--dim)",
+          )}
+        >
+          {connected ? "IDE loaded" : "IDE loading"}
+        </span>
+        <span
+          title={
+            bridged
+              ? "The editor is connected to the agent runtime (IDE bridge)"
+              : "No IDE bridge connection for this folder"
+          }
+          className={cx(
+            "whitespace-nowrap rounded-full px-2 py-0.5 text-[length:var(--fs-xs)]",
+            bridged ? "bg-(--active) text-(--fg)" : "bg-(--surface-2)/40 text-(--dim)",
+          )}
+        >
+          {bridged ? "IDE connected" : "IDE offline"}
+        </span>
       </div>
       {state.error ? (
         <p className="shrink-0 border-b border-(--border)/60 px-3 py-1.5 text-[length:var(--fs-xs)] text-(--err)">
@@ -273,6 +291,7 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
             onInputChange={tools.setBrowserInput}
             onNavigate={(value) => navigateBrowser(tools, cwd, value)}
             onLocationChange={(next) => tools.setBrowserUrl(next, next)}
+            visible={tab === "browser"}
             onClose={() => {
               tools.setComputerOpen(false);
               setTab("chat");
@@ -281,7 +300,12 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
         </Suspense>
       ) : null}
       {tab === "context" ? (
-        <AceContextTab sessionId={focused?.id ?? null} piSessionId={piSessionId} cwd={cwd} />
+        <AceContextTab
+          sessionId={focused?.id ?? null}
+          piSessionId={piSessionId}
+          cwd={cwd}
+          finished={Boolean(piSessionId) && focused?.status === "idle"}
+        />
       ) : null}
       {tab === "memory" ? <AceMemoryTab cwd={cwd} proposals={proposals} /> : null}
       {tab === "ace" ? <AceStatusTab cwd={cwd} /> : null}
