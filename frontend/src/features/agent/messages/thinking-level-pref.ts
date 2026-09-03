@@ -43,5 +43,7 @@ export function pickThinkingLevel(
   if (saved && levels.includes(saved)) return saved;
   if (preferred && levels.includes(preferred)) return preferred;
   if (levels.includes("high")) return "high";
+  // A profiled model lists efforts without `high` (Qwen3.8: low | medium | xhigh); its default is medium.
+  if (levels.includes("medium")) return "medium";
   return levels.at(-1) ?? "off";
 }

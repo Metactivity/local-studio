@@ -55,6 +55,15 @@ import {
 } from "./pty-handlers";
 import { handleAgentModels } from "./model-handlers";
 import {
+  handleAceLens,
+  handleAceMemory,
+  handleAceProposalResolve,
+  handleAceProposals,
+  handleAceRebuildGraph,
+  handleAceRestart,
+  handleAceStatus,
+} from "./ace-handlers";
+import {
   handleConnectorCall,
   handleConnectorDelete,
   handleConnectorGrantDelete,
@@ -148,6 +157,13 @@ export function createAgentRuntimeApp() {
   app.get("/api/agent/setup-checks", () => handleSetupChecks());
   app.get("/api/agent/models", () => handleAgentModels());
   app.post("/api/agent/models", (c) => handleAgentModels(c.req.raw));
+  app.get("/api/agent/ace/status", (c) => handleAceStatus(c.req.raw));
+  app.get("/api/agent/ace/proposals", (c) => handleAceProposals(c.req.raw));
+  app.post("/api/agent/ace/proposals/:id", (c) => handleAceProposalResolve(c.req.raw, c.req.param("id")));
+  app.get("/api/agent/ace/memory", (c) => handleAceMemory(c.req.raw));
+  app.get("/api/agent/ace/lens", (c) => handleAceLens(c.req.raw));
+  app.post("/api/agent/ace/rebuild-graph", (c) => handleAceRebuildGraph(c.req.raw));
+  app.post("/api/agent/ace/restart", () => handleAceRestart());
   app.get("/api/agent/sessions", (c) => handleSessionsList(c.req.raw));
   app.delete("/api/agent/sessions", () => handleSessionsDelete());
   app.get("/api/agent/sessions/all", (c) => handleAllSessions(c.req.raw));
