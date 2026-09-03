@@ -1,4 +1,6 @@
-// Harness SessionRepo / SessionStorage on bun:sqlite (ADR-015, ADR-033 §2.4).
+// Harness SessionRepo / SessionStorage on SQLite (ADR-015, ADR-033 §2.4),
+// through `node:sqlite` so the same file runs under bun (dev, tests) and under
+// node (the packaged standalone bundle).
 //
 // Same shape as the vendored JSONL backend: the in-memory `SessionState` holds
 // the tree and enforces every invariant; this file only makes the mutation
@@ -7,7 +9,7 @@
 
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { Database } from "bun:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import {
   type BranchBounds,
   type Entry,
@@ -57,9 +59,11 @@ CREATE TABLE IF NOT EXISTS mutations (
 ) WITHOUT ROWID;
 `;
 
+export type Database = DatabaseSync;
+
 export function openSessionsDatabase(file: string): Database {
   if (file !== ":memory:") mkdirSync(path.dirname(file), { recursive: true });
-  const db = new Database(file, { create: true });
+  const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
@@ -96,8 +100,8 @@ export class SqliteSessionStorage implements SessionStorage<SqliteSessionMetadat
   static load(db: Database, metadata: SqliteSessionMetadata): SqliteSessionStorage {
     const storage = new SqliteSessionStorage(db, metadata);
     const rows = db
-      .query<{ json: string }, [string]>("SELECT json FROM mutations WHERE session_id = ? ORDER BY seq")
-      .all(metadata.id);
+      .prepare("SELECT json FROM mutations WHERE session_id = ? ORDER BY seq")
+      .all(metadata.id) as unknown as { json: string }[];
     for (const row of rows) storage.#state.applyMutation(JSON.parse(row.json) as SessionMutation);
     return storage;
   }
@@ -105,16 +109,21 @@ export class SqliteSessionStorage implements SessionStorage<SqliteSessionMetadat
   forkInto(metadata: SqliteSessionMetadata, options: ForkOptions): SqliteSessionStorage {
     const mutations = this.#state.createForkMutations(options);
     const target = new SqliteSessionStorage(this.#db, metadata);
-    this.#db.transaction(() => {
+    this.#db.exec("BEGIN");
+    try {
       for (const mutation of mutations) target.#commit(mutation);
-    })();
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
     return target;
   }
 
   #commit(mutation: SessionMutation): void {
     const seq = mutation.kind === "entry" ? mutation.entry.seq : mutation.kind === "record" ? mutation.record.seq : mutation.seq;
     this.#db
-      .query("INSERT INTO mutations (session_id, seq, json) VALUES (?, ?, ?)")
+      .prepare("INSERT INTO mutations (session_id, seq, json) VALUES (?, ?, ?)")
       .run(this.#metadata.id, seq, JSON.stringify(mutation));
     this.#state.applyMutation(mutation);
   }
@@ -244,14 +253,15 @@ export class SqliteSessionRepo implements SessionRepo<SqliteSessionMetadata, Sql
   }
 
   async list(): Promise<SqliteSessionMetadata[]> {
-    return this.#db
-      .query<SessionRow, []>("SELECT id, created_at, parent_session_id, cwd FROM sessions ORDER BY created_at DESC")
-      .all()
-      .map(metadataFromRow);
+    return (
+      this.#db
+        .prepare("SELECT id, created_at, parent_session_id, cwd FROM sessions ORDER BY created_at DESC")
+        .all() as unknown as SessionRow[]
+    ).map(metadataFromRow);
   }
 
   async delete(metadata: SqliteSessionMetadata): Promise<void> {
-    this.#db.query("DELETE FROM sessions WHERE id = ?").run(metadata.id);
+    this.#db.prepare("DELETE FROM sessions WHERE id = ?").run(metadata.id);
   }
 
   async fork(
@@ -265,7 +275,7 @@ export class SqliteSessionRepo implements SessionRepo<SqliteSessionMetadata, Sql
 
   #insert(options: SqliteSessionCreateOptions): SqliteSessionMetadata {
     const id = options.id ?? uuidv7();
-    if (this.#db.query("SELECT 1 FROM sessions WHERE id = ?").get(id) !== null) {
+    if (this.#db.prepare("SELECT 1 FROM sessions WHERE id = ?").get(id) !== undefined) {
       throw new SessionError("already_exists", `Session already exists: ${id}`);
     }
     const metadata: SqliteSessionMetadata = {
@@ -275,16 +285,16 @@ export class SqliteSessionRepo implements SessionRepo<SqliteSessionMetadata, Sql
       ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
     };
     this.#db
-      .query("INSERT INTO sessions (id, created_at, parent_session_id, cwd) VALUES (?, ?, ?, ?)")
+      .prepare("INSERT INTO sessions (id, created_at, parent_session_id, cwd) VALUES (?, ?, ?, ?)")
       .run(id, metadata.createdAt, metadata.parentSessionId ?? null, metadata.cwd ?? null);
     return metadata;
   }
 
   #require(id: string): SqliteSessionMetadata {
     const row = this.#db
-      .query<SessionRow, [string]>("SELECT id, created_at, parent_session_id, cwd FROM sessions WHERE id = ?")
-      .get(id);
-    if (row === null) throw new SessionError("not_found", `Session not found: ${id}`);
+      .prepare("SELECT id, created_at, parent_session_id, cwd FROM sessions WHERE id = ?")
+      .get(id) as unknown as SessionRow | undefined;
+    if (row === undefined) throw new SessionError("not_found", `Session not found: ${id}`);
     return metadataFromRow(row);
   }
 

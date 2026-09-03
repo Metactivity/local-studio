@@ -15,6 +15,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { agentCore } from "./agent-core";
 import { resolveDataDir } from "./data-dir";
 import { expandHome } from "./pi-runtime-helpers";
 import { rolloutCache, statRollout } from "./rollout-cache";
@@ -34,7 +35,7 @@ export type { SessionSummary } from "../../../shared/agent/session-summary";
 
 export type SessionEvent = Record<string, unknown> & { type?: string };
 
-type ListSessionsOptions = {
+export type ListSessionsOptions = {
   since?: Date;
   ids?: string[];
   includeArchived?: boolean;
@@ -42,7 +43,7 @@ type ListSessionsOptions = {
   limit?: number;
 };
 
-type NormalizedListSessionsOptions = {
+export type NormalizedListSessionsOptions = {
   sinceMs?: number;
   wantedIds: Set<string>;
   wantedIdList: string[];
@@ -58,7 +59,7 @@ type UserTurn = {
   at: string | null;
 };
 
-function summaryStartTime(session: Pick<SessionSummary, "startedAt" | "updatedAt">): number {
+export function summaryStartTime(session: Pick<SessionSummary, "startedAt" | "updatedAt">): number {
   const value = Date.parse(session.startedAt || session.updatedAt);
   return Number.isFinite(value) ? value : 0;
 }
@@ -278,7 +279,7 @@ async function readSessionSummary(
 
 type SessionMetadataLookup = ReturnType<typeof readSessionListMetadata>;
 
-function applySessionMetadata(
+export function applySessionMetadata(
   summary: SessionSummary,
   metadataFor: SessionMetadataLookup,
 ): SessionSummary {
@@ -302,7 +303,7 @@ function summaryRelevantTime(summary: SessionSummary, archivedOnly: boolean): nu
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function normalizeListOptions(options: ListSessionsOptions): NormalizedListSessionsOptions {
+export function normalizeListOptions(options: ListSessionsOptions): NormalizedListSessionsOptions {
   const wantedIds = new Set((options.ids ?? []).map((id) => id.trim()).filter(Boolean));
   const sinceMs = options.since?.getTime();
   return {
@@ -314,7 +315,7 @@ function normalizeListOptions(options: ListSessionsOptions): NormalizedListSessi
   };
 }
 
-function summaryMatchesListOptions(
+export function summaryMatchesListOptions(
   summary: SessionSummary,
   options: NormalizedListSessionsOptions,
 ) {
@@ -390,9 +391,22 @@ function limitSatisfied(
   return nextMtimeMs < startTimes[limit - 1];
 }
 
+// The harness store is imported lazily: it sits on the @metactivity/ace graph,
+// which node loads only from the bundle.
+const harnessSessions = async () => (await import("./harness-sessions")).harnessSessions();
+
 export async function listSessions(
   cwd: string,
   options: ListSessionsOptions = {},
+): Promise<SessionSummary[]> {
+  return agentCore() === "harness"
+    ? (await harnessSessions()).listSessions(cwd, options)
+    : listPiSessions(cwd, options);
+}
+
+async function listPiSessions(
+  cwd: string,
+  options: ListSessionsOptions,
 ): Promise<SessionSummary[]> {
   const summariesById = new Map<string, SessionSummary>();
   const normalizedOptions = normalizeListOptions(options);
@@ -795,6 +809,16 @@ export async function loadSession(
   sessionId: string,
   options: LoadSessionOptions = {},
 ): Promise<LoadSessionResult> {
+  return agentCore() === "harness"
+    ? (await harnessSessions()).loadSession(cwd, sessionId, options)
+    : loadPiSession(cwd, sessionId, options);
+}
+
+async function loadPiSession(
+  cwd: string,
+  sessionId: string,
+  options: LoadSessionOptions,
+): Promise<LoadSessionResult> {
   const filepath = findSessionFile(cwd, sessionId);
   if (!filepath) return { events: [], cursor: null, meta: null };
   const { size } = statSync(filepath);
@@ -814,7 +838,7 @@ export async function loadSession(
       }
       return { events: activeBranchEvents(filepath, events), cursor: null, meta: null };
     }
-    return loadSession(cwd, sessionId, { tail: 2000 });
+    return loadPiSession(cwd, sessionId, { tail: 2000 });
   }
 
   const effectiveTail = tail ?? 500;

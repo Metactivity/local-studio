@@ -18,7 +18,7 @@ export interface JournalPayloads {
     originalChars: number;
     compactedChars: number;
   };
-  "ace.history-compaction": { tokensBefore: number; retainedMessages: number; summaryChars: number };
+  "ace.history-compaction": { tokensBefore: number; retainedMessages: number; summaryChars: number; summary: string };
   "ace.evaluation": { outcome: string; signals: string[]; rationale: string };
   "ace.reflection": { proposals: number; new: number };
   "ace.degraded": { where: string; error: string };
