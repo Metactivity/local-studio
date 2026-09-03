@@ -17,17 +17,22 @@ import {
   type AgentMessage,
   DEFAULT_COMPACTION_SETTINGS,
   estimateContextTokens,
+  formatSkillsForSystemPrompt,
+  loadSkills,
   shouldCompact,
   type ThinkingLevel,
   uuidv7,
 } from "@local-studio/harness";
+import { NodeExecutionEnv } from "@local-studio/harness/node";
 import { type AceHarness, createAceHarness, createDefaultTools, DEFAULT_SYSTEM_PROMPT } from "./ace/ace-harness";
 import { aceService, readAceConfig } from "./ace/ace-service";
 import type { ModelProfile } from "./harness/model-profile";
 import { resolveModelProfile } from "./harness/model-profile";
 import { createHarnessModel, createHarnessModels } from "./harness/spark-model";
 import { harnessSessions, harnessStoreRoot } from "./harness-sessions";
+import { getGlobalSingleton } from "./instances";
 import {
+  buildAgentSessionOptionsSync,
   comparableQueuedText,
   planQueuedFollowUpMutation,
   resolveAgentCwdEffect,
@@ -38,6 +43,7 @@ import { refreshPiModels, selectPiRuntimeModel, toPiThinkingLevel } from "./pi-r
 import type { LoggedPiEvent, PiAgentSession, PiAgentStatus, PiPromptOptions } from "./pi-runtime-types";
 import { notifySessionListChanged } from "./session-list-changed";
 import { getApiSettings } from "./settings-service";
+import { builtinTools, type ToolContext, withAgentPolicy, withTimeoutPolicy } from "./tools";
 import type { AgentImageInput } from "../../../shared/agent/agent-image-input";
 import type { AgentQueueAction } from "../../../shared/agent/agent-turn";
 
@@ -98,6 +104,26 @@ async function startedAceService() {
   return ace;
 }
 
+/**
+ * The built-in tools reach the runtime's own routes (automations, subagents,
+ * connectors, browser host) in process: the pi extensions went through the
+ * frontend proxy to the same handlers. Imported lazily — http/app sits on the
+ * pi-runtime graph, which imports this module behind the core flag.
+ */
+async function requestRuntime(path: string, init?: RequestInit): Promise<Response> {
+  const app = await getGlobalSingleton("harnessToolsApp", async () => (await import("./http/app")).createAgentRuntimeApp().app);
+  const headers = new Headers(init?.headers);
+  headers.set("host", "127.0.0.1");
+  return app.request(path, { ...init, headers });
+}
+
+export interface HarnessSessionOptions {
+  /** Test seam: where a model id is served. Default: `resolveHarnessEndpoint`. */
+  resolveEndpoint?: (modelId: string) => Promise<HarnessEndpoint>;
+  /** Test seam: the runtime's HTTP surface the built-in tools call. Default: in process. */
+  request?: ToolContext["request"];
+}
+
 function userMessage(text: string, images: AgentImageInput[] = []): AgentMessage {
   return {
     role: "user",
@@ -112,13 +138,9 @@ function textOf(message: AgentMessage): string {
   return message.content.map((block) => (block.type === "text" ? block.text : "")).join("");
 }
 
-export interface HarnessSessionOptions {
-  /** Test seam: where a model id is served. Default: `resolveHarnessEndpoint`. */
-  resolveEndpoint?: (modelId: string) => Promise<HarnessEndpoint>;
-}
-
 export class HarnessSession extends EventEmitter implements PiAgentSession {
   readonly #resolveEndpoint: (modelId: string) => Promise<HarnessEndpoint>;
+  readonly #request: ToolContext["request"];
   private harness: AceHarness | null = null;
   private unsubscribe: (() => void) | null = null;
   private profile: ModelProfile | null = null;
@@ -138,6 +160,7 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   constructor(options: HarnessSessionOptions = {}) {
     super();
     this.#resolveEndpoint = options.resolveEndpoint ?? resolveHarnessEndpoint;
+    this.#request = options.request ?? requestRuntime;
   }
 
   async ensureStarted(
@@ -171,8 +194,23 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
     const session = wantedSessionId
       ? await store.repo.open({ id: wantedSessionId, createdAt: 0 }).catch(() => undefined)
       : undefined;
-    const tools = createDefaultTools(resolvedCwd, ace);
+    // Known before the harness exists: the subagent tools attribute their children to it.
+    const sessionId = session ? (await session.getMetadata()).id : uuidv7();
     const level = toPiThinkingLevel(startOptions.thinkingLevel ?? "high") as ThinkingLevel;
+
+    // Same gates, skill directories and env the pi driver hands its extensions.
+    const sessionOptions = buildAgentSessionOptionsSync({ options: startOptions, cwd: resolvedCwd });
+    const env = { ...process.env, ...sessionOptions.envInjections };
+    const tools = [
+      ...withTimeoutPolicy(createDefaultTools(resolvedCwd, ace), env),
+      ...(await builtinTools({ cwd: resolvedCwd, sessionId, modelId, env, request: this.#request, gates: sessionOptions.toolGates })),
+    ];
+    const { skills } = await loadSkills(new NodeExecutionEnv({ cwd: resolvedCwd }), sessionOptions.skills);
+    const systemPrompt = withAgentPolicy(
+      [DEFAULT_SYSTEM_PROMPT, ...(profile.vision ? [VISION_GUIDANCE] : []), ...(skills.length > 0 ? [formatSkillsForSystemPrompt(skills)] : [])].join(
+        "\n\n",
+      ),
+    );
 
     const harness = await createAceHarness({
       cwd: resolvedCwd,
@@ -182,13 +220,12 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       profile,
       ace,
       thinkingLevel: level,
-      ...(profile.vision ? { systemPrompt: `${DEFAULT_SYSTEM_PROMPT}\n\n${VISION_GUIDANCE}` } : {}),
+      systemPrompt,
       ...(startOptions.toolAccess === "read_only"
         ? { tools: tools.filter((tool) => tool.name === "read" || tool.name === "ace_retrieve_context") }
         : { tools }),
-      ...(session ? { session } : {}),
+      ...(session ? { session } : { sessionId }),
     });
-    const sessionId = (await harness.session.getMetadata()).id;
     if (!session) {
       // The header the session list and the frontend fold read the model from.
       await harness.session.appendEntry(

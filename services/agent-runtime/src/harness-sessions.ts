@@ -9,7 +9,7 @@ import { realpathSync } from "node:fs";
 import path from "node:path";
 import type { Entry } from "@local-studio/harness";
 import { type Database, openSessionsDatabase, SqliteSessionRepo } from "./ace/sqlite-session-repo";
-import { resolveDataDir } from "./data-dir";
+import { harnessStoreRoot } from "./data-dir";
 import { getGlobalSingleton } from "./instances";
 import { readSessionListMetadata } from "./session-metadata-store";
 import { accumulateUsageLine, emptyUsageTotals } from "./session-usage";
@@ -31,9 +31,7 @@ import type { SessionSummary } from "../../../shared/agent/session-summary";
 
 const DEFAULT_TAIL = 500;
 
-export function harnessStoreRoot(env: NodeJS.ProcessEnv = process.env): string {
-  return env.ACE_STORE_ROOT?.trim() || path.join(resolveDataDir(), "ace-store");
-}
+export { harnessStoreRoot };
 
 type SessionRow = { id: string; created_at: number; cwd: string | null };
 

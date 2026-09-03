@@ -44,12 +44,28 @@ type AgentSessionOptionsInput = {
   processEnv?: NodeJS.ProcessEnv;
 };
 
+/** Which built-in tool families a session gets; the harness core reads these
+ *  where the pi driver reads `extensionPaths` (same predicates, see below). */
+export type BuiltinToolGates = {
+  browser: boolean;
+  chrome: boolean;
+  github: boolean;
+  obsidian: boolean;
+  connectors: boolean;
+};
+
 type AgentSessionOptions = {
   // Absolute filesystem paths to .ts/.js extension modules. The SDK's
   // resource-loader uses jiti to load these; we hand paths instead of
   // pre-imported factories so we never trigger webpack's static analyser on a
   // dynamic `import(variable)` in the Next runtime bundle.
+  //
+  // The pi driver is still the default core, so the bundled pi-extensions stay
+  // in the desktop resources and keep loading here; the harness core runs the
+  // same tools in process (src/tools/, MET-915). The extension files and this
+  // list go away together with the flip to the harness core.
   extensionPaths: string[];
+  toolGates: BuiltinToolGates;
   skills: string[];
   /** Absolute prompt-template file/dir paths; forwarded to the SDK. */
   promptTemplatePaths: string[];
@@ -171,6 +187,16 @@ function browserBackend(options: RuntimeStartOptions): BrowserBackend {
 /** The user's own browser is armed on top of the sandbox, never instead of it. */
 function shouldLoadChromeTool(options: RuntimeStartOptions): boolean {
   return shouldLoadBrowserTool(options) && browserBackend(options) === "chrome";
+}
+
+function builtinToolGates(options: RuntimeStartOptions): BuiltinToolGates {
+  return {
+    browser: shouldLoadBrowserTool(options),
+    chrome: shouldLoadChromeTool(options),
+    github: hasGithubCliSync(),
+    obsidian: hasObsidianVaultSync(),
+    connectors: hasEnabledConnectorsSync(),
+  };
 }
 
 function runtimeExtensionPaths(options: RuntimeStartOptions): string[] {
@@ -375,6 +401,7 @@ export function buildAgentSessionOptionsSync(input: AgentSessionOptionsInput): A
   const options = input.options;
   return {
     extensionPaths: runtimeExtensionPaths(options),
+    toolGates: builtinToolGates(options),
     skills: runtimeSkillPaths(options),
     promptTemplatePaths: selectedPromptTemplatePaths(options.promptTemplates ?? []),
     envInjections: runtimeEnvInjections(options, input.processEnv ?? process.env, input.cwd ?? ""),

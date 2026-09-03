@@ -79,6 +79,11 @@ export function resolveDataDir(): string {
   return dir;
 }
 
+/** Where the harness core keeps ACE stores and `sessions.db` (LOCAL_STUDIO_AGENT_CORE=harness). */
+export function harnessStoreRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return env.ACE_STORE_ROOT?.trim() || path.join(resolveDataDir(), "ace-store");
+}
+
 export function resolveSettingsFilePath(): string {
   return path.join(resolveDataDir(), SETTINGS_FILENAME);
 }
