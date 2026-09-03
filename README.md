@@ -126,15 +126,12 @@ benchmarking. Engine installs (vLLM/SGLang/MLX) land below the data directory at
 
 ## Agent runtime
 
-The agent surface lives at `/agent` in the frontend. It uses
-`@earendil-works/pi-coding-agent` through the frontend runtime rather than
-shelling out to a separate agent process for normal turns. Agent skills and
-extensions are discovered through Pi and surfaced in the session UI. Pi remains
-the source of truth for authentication, settings, resources, tools, and native
-JSONL sessions. The runtime respects `PI_CODING_AGENT_DIR`,
-`PI_CODING_AGENT_SESSION_DIR`, and Pi's `sessionDir` setting in the same
-precedence order as the CLI. Existing Local Studio session storage remains a
-read-compatible legacy source, while new sessions use Pi's resolved directory.
+The agent surface lives at `/agent` in the frontend. Turns run in the
+`services/agent-runtime` process on the ACE-rooted harness core
+(`docs/ace-harness.md`): the vendored pi agent loop with Local Studio's own
+built-in tools, skills and policies, and sessions in `sessions.db` under the
+ACE store root. Cloud-provider sign-in still goes through pi's `ModelRuntime`
+(`~/.pi/agent/auth.json`).
 Workbench sends only the active controller to Pi and shows that controller's
 advertised models by default. The model picker has an explicit Other models
 switch for models from the user's Pi catalog and providers connected in

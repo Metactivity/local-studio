@@ -3,7 +3,7 @@
   "version": "2.1.0",
   "private": true,
   "type": "module",
-  "description": "Standalone local Pi agent runtime, filesystem services, connectors, and browser host.",
+  "description": "Standalone local agent runtime (ACE-rooted harness core), filesystem services, connectors, and browser host.",
   "exports": {
     ".": "./src/index.ts",
     "./*": "./src/*.ts"
