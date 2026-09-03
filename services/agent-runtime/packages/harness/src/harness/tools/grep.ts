@@ -85,7 +85,7 @@ export function createGrepTool<TContext extends ExecutionToolContext = Execution
 				return lines;
 			};
 
-			const args: string[] = ["--json", "--line-number", "--color=never", "--hidden"];
+			const args: string[] = ["--json", "--line-number", "--color=never", "--hidden", "--sort", "path"];
 			if (ignoreCase) args.push("--ignore-case");
 			if (literal) args.push("--fixed-strings");
 			if (glob) args.push("--glob", glob);
