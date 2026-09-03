@@ -161,11 +161,11 @@ a.nav-link:hover,
 }
 
 /* Focus */
+/* `ring` is not a CSS property — the old rule removed the outline and drew
+   nothing, so keyboard focus was invisible on every theme (WCAG 2.4.7). */
 :focus-visible {
-  outline: none;
-  ring: 2px solid var(--accent);
-  ring-offset: 2px;
-  ring-offset-color: var(--bg);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* Selection. One rule for all themes: the old dark variant hung off a `.dark`

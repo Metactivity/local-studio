@@ -12,7 +12,7 @@ import {
 } from "@/lib/themes";
 
 const STORE_KEY = "local-studio-state";
-const DEFAULT_THEME_ID: ThemeId = "zai-dark";
+const DEFAULT_THEME_ID: ThemeId = "tuum-dark";
 
 function lightnessFromColor(value: string): number | null {
   const hsl = value.match(/hsla?\([^,]+,\s*[^,]+,\s*([\d.]+)%/i);

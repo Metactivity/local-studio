@@ -272,6 +272,22 @@ picker), `GET /api/agent/fs/raw` (inline media in the timeline), `highlight-cach
 the harness `read` / `edit` / `grep` / `bash` tools (runtime tools, not UI), every `ide_*` tool, the runtime's
 project branch lookup for the nav, and the Electron desktop's own pty manager (`frontend/desktop/logic/`).
 
+## Identity (ADR-034 M9)
+
+Local Studio reads as Tuum from the Production Design Kit (Figma `AahVHwpjlIx6UpHyklf8Gw`); the kit governs colour,
+type, icons, badges, motion and empty states — layouts stay Local Studio's.
+
+| Piece | Where |
+| --- | --- |
+| Theme ids | `tuum-dark` (default), `tuum-light`, `tuum-hc` — `frontend/src/lib/themes-data.ts` (surfaces, inlined by the theme runtime) + the `:root[data-theme="tuum-*"]` blocks in `frontend/src/app/styles/globals/tokens.css` (accent-as-link, status hues, focus ring). `--radius-base` stays 10 px. |
+| Identity strings | `frontend/src/lib/tuum-identity.ts` — name, title, favicon, empty-state copy, `tuumStudioTheme(themeId)` (LS id → Tuum Studio theme name). |
+| Assets | `frontend/public/tuum/{brand,icons,illustrations,providers}` — committed copies of the kit exports vendored in the tuum checkout. Refresh with `scripts/sync-tuum-assets.sh [tuum-checkout]` (default `~/Work/Metactivity/tuum`). Never a Figma URL at runtime. |
+| Components | `frontend/src/ui/tuum.tsx` (`TuumProviderBadge`, `TuumThinkingIndicator`, `TuumResponseAttribution`, `TuumStatusIndicator`, `TuumEmptyState`) and `frontend/src/ui/tuum-icon.tsx` (product icons as `currentColor` masks, symbol, wordmark). |
+| Workbench theme hand-off | `/ide` boots the iframe with `?theme=<ls id>` and posts `{type: "tuum.theme", theme: "Tuum Dark" \| "Tuum Light" \| "Tuum High Contrast"}` (same origin) on every theme change. The `ace-agent` extension does not listen yet — M10 follow-up. |
+| Keyboard scoping | Unchanged from M1: the shell ignores ⌘K / ⌘N while the iframe holds focus (`left-sidebar.tsx`). |
+
+Every new string is English only: the frontend has no i18n mechanism (no FR bundle to feed).
+
 ## Environment
 
 | Variable                                   | Default                                       | Role                                                                                                |

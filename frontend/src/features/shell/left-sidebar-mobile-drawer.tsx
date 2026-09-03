@@ -1,6 +1,7 @@
 "use client";
 
 import { Settings } from "@/ui/icon-registry";
+import { TuumSymbol, TuumWordmark } from "@/ui/tuum-icon";
 import { Drawer, DrawerHeader, DrawerOverlay } from "@/ui/drawer";
 import type { ProjectsNavSectionComponent } from "@/features/shell/left-sidebar-lazy";
 import {
@@ -34,8 +35,9 @@ export function MobileNavigationDrawer({
       >
         <DrawerHeader
           title={
-            <span className="text-[19px] font-semibold tracking-[-0.01em] text-(--fg)">
-              Local Studio
+            <span className="flex items-center gap-2 text-(--fg)">
+              <TuumSymbol size={20} />
+              <TuumWordmark className="h-3.5 w-[30px]" />
             </span>
           }
           onClose={onClose}

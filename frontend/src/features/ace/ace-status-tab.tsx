@@ -11,12 +11,23 @@ import {
 } from "@/features/ace/api";
 import { useAceResource } from "@/features/ace/use-ace-resource";
 import { AcePanelNotice } from "@/features/ace/ace-panel-notice";
+import { TUUM } from "@/lib/tuum-identity";
+import { TuumEmptyState, TuumStatusIndicator, type TuumStatusState } from "@/ui/tuum";
 
 function healthTone(health: string | undefined): MeterTone {
   if (health === "ready") return "ok";
   if (health === "degraded" || health === "starting") return "warn";
   if (health === "unavailable") return "err";
   return "dim";
+}
+
+/** The ACE state machine → the four kit states (MET-834). */
+function coreState(report: AceStatusReport | null, busy: boolean): TuumStatusState {
+  if (busy) return "busy";
+  const health = report?.health?.health;
+  if (!report?.configured || health === "unavailable" || !health) return "unavailable";
+  if (health === "ready" && !report.status?.degraded) return "ready";
+  return "warning";
 }
 
 function relative(iso: string | null | undefined): string {
@@ -134,13 +145,26 @@ export function AceStatusTab({ cwd }: { cwd: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-4">
+      <div className="mt-3">
+        <TuumStatusIndicator
+          state={
+            status.loading && !status.data ? "busy" : coreState(status.data ?? null, busy !== null)
+          }
+          detail={status.data?.health?.detail || status.data?.status?.degraded || undefined}
+        />
+      </div>
       {status.error ? <AcePanelNotice tone="error">{status.error}</AcePanelNotice> : null}
-      {status.data ? (
+      {status.data && !status.data.configured ? (
+        <TuumEmptyState illustration="local-unavailable" title={TUUM.copy.localUnavailable}>
+          {status.data.problems.join(" · ") ||
+            "Configure ACE_CHAT_BASE_URL on the runtime to enable ACE."}
+        </TuumEmptyState>
+      ) : status.data ? (
         <StatusCard report={status.data} />
       ) : status.loading ? (
         <AcePanelNotice>Loading ACE status…</AcePanelNotice>
       ) : null}
-      {status.data?.problems.length ? (
+      {status.data?.configured && status.data.problems.length ? (
         <AcePanelNotice tone="error">{status.data.problems.join(" · ")}</AcePanelNotice>
       ) : null}
       <div className="mt-4 flex items-center gap-2">
