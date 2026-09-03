@@ -175,7 +175,7 @@ describe("IDE bridge server", () => {
     expect(ideContextBlock(context, "/w", 80)!.length).toBeLessThanOrEqual(80);
     expect(ideContextBlock(emptyContext({ sessionId: "s", extensionVersion: "0" }), "/w")).toBeNull();
     // Malformed events leave the context untouched; a resolved diagnostic drops out.
-    expect(applyIdeEvent(context, "ide.editor.active", { nope: true })).toEqual(context);
+    expect(applyIdeEvent(context, "ide.editor.active", { nope: true })).toBe(context);
     expect(applyIdeEvent(context, "ide.diagnostics.changed", { uri: "file:///w/tab-1.ts", summary: { errors: 0, warnings: 0 } }).diagnostics["file:///w/tab-1.ts"]).toBeUndefined();
   });
 

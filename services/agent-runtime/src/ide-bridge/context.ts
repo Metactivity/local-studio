@@ -41,17 +41,20 @@ export function applyIdeEvent(context: IdeContext, method: string, params: unkno
   const record = (params ?? {}) as Record<string, unknown>;
   switch (method) {
     case "ide.editor.active":
-      next.activeEditor = params === null || typeof record.uri === "string" ? (params as IdeContext["activeEditor"]) : context.activeEditor;
+      if (params !== null && typeof record.uri !== "string") return context;
+      next.activeEditor = params as IdeContext["activeEditor"];
       break;
     case "ide.editor.tabs":
-      next.tabs = Array.isArray(record.uris) ? record.uris.filter((uri): uri is string => typeof uri === "string") : context.tabs;
+      if (!Array.isArray(record.uris)) return context;
+      next.tabs = record.uris.filter((uri): uri is string => typeof uri === "string");
       break;
     case "ide.document.saved":
-      if (typeof record.uri === "string") next.lastSaved = record.uri;
+      if (typeof record.uri !== "string") return context;
+      next.lastSaved = record.uri;
       break;
     case "ide.diagnostics.changed": {
       const summary = record.summary as { errors?: unknown; warnings?: unknown } | undefined;
-      if (typeof record.uri !== "string" || !summary) break;
+      if (typeof record.uri !== "string" || !summary) return context;
       const errors = Number(summary.errors) || 0;
       const warnings = Number(summary.warnings) || 0;
       const diagnostics = { ...context.diagnostics };
@@ -61,7 +64,8 @@ export function applyIdeEvent(context: IdeContext, method: string, params: unkno
       break;
     }
     case "ide.scm.changed":
-      if (Array.isArray(record.changes)) next.scm = params as IdeContext["scm"];
+      if (!Array.isArray(record.changes)) return context;
+      next.scm = params as IdeContext["scm"];
       break;
     default:
       return context;
