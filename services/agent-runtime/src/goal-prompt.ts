@@ -106,15 +106,19 @@ export function readGoalSync(piSessionId: string): GoalPromptInput | null {
   }
 }
 
+/** The steering section for `piSessionId`, or null when there is nothing to add
+ *  (no goal, or a non-steering status). */
+export function goalSystemContext(piSessionId: string): string | null {
+  const goal = readGoalSync(piSessionId);
+  return goal ? goalSystemPromptSection(goal) : null;
+}
+
 /** Append the steering section for `piSessionId` to `systemPrompt`, or return
  *  null when there is nothing to add (no goal, non-steering status, or the
  *  section is already present — chained overrides could re-run this). */
 export function appendGoalSystemPrompt(systemPrompt: string, piSessionId: string): string | null {
-  const goal = readGoalSync(piSessionId);
-  if (!goal) return null;
-  const section = goalSystemPromptSection(goal);
-  if (!section) return null;
-  if (systemPrompt.includes(MARKER)) return null;
+  const section = goalSystemContext(piSessionId);
+  if (!section || systemPrompt.includes(MARKER)) return null;
   return `${systemPrompt.trimEnd()}\n\n${section}`;
 }
 

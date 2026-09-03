@@ -7,6 +7,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetAceService } from "../src/ace/ace-service";
+import { writeGoal } from "../src/goals-store";
 import { HarnessSession } from "../src/harness-runtime";
 import { startFakeLlamaServer, type FakeLlamaServer, type ScriptedReply } from "./support/fake-llama-server";
 
@@ -119,6 +120,34 @@ describe("HarnessSession", () => {
         ["list_automations", false, "No automations are scheduled. Use schedule_automation to create one."],
         ["subagent_list", false, "This session has not spawned any subagents."],
       ]);
+    } finally {
+      await session.stop();
+      server.stop();
+    }
+  }, 30_000);
+
+  test("a /template message expands like pi did and the session goal reaches the system prompt", async () => {
+    const templateDir = join(root, "prompts");
+    Bun.spawnSync(["mkdir", "-p", templateDir]);
+    const templatePath = join(templateDir, "greet.md");
+    await Bun.write(templatePath, "---\ndescription: Greet people.\n---\nSay hello to $1, then to $2. All: $@\n");
+    const server = startFakeLlamaServer([{ text: "Hello Alice, hello Bob." }, { text: "Still here." }]);
+    const session = driver(server);
+    try {
+      await session.ensureStarted("fake-qwen3.8", cwd, null, {
+        thinkingLevel: "low",
+        promptTemplates: [{ id: "local-studio:greet", name: "greet", path: templatePath }],
+      });
+      await writeGoal(session.status.piSessionId!, { objective: "Greet everyone in the room", status: "active" });
+      await session.prompt('/greet Alice "Bob Jr"', () => undefined);
+      await session.prompt("/missing template stays as typed", () => undefined);
+
+      const chats = server.seen.filter((seen) => seen.path === "/v1/chat/completions").map((seen) => seen.body!);
+      const messages = (index: number) => chats[index]!.messages as Array<{ role: string; content: string | Array<{ text: string }> }>;
+      const userText = (index: number) => (messages(index).at(-1)!.content as Array<{ text: string }>)[0]!.text;
+      expect(messages(0)[0]!.content).toContain("<objective>Greet everyone in the room</objective>");
+      expect(userText(0)).toBe("Say hello to Alice, then to Bob Jr. All: Alice Bob Jr");
+      expect(userText(1)).toBe("/missing template stays as typed");
     } finally {
       await session.stop();
       server.stop();

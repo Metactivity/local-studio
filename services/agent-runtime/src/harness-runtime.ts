@@ -18,8 +18,12 @@ import {
   DEFAULT_COMPACTION_SETTINGS,
   estimateContextTokens,
   formatSkillsForSystemPrompt,
+  loadPromptTemplates,
   loadSkills,
+  parseCommandArgs,
+  type PromptTemplate,
   shouldCompact,
+  substituteArgs,
   type ThinkingLevel,
   uuidv7,
 } from "@local-studio/harness";
@@ -29,6 +33,7 @@ import { aceService, readAceConfig } from "./ace/ace-service";
 import type { ModelProfile } from "./harness/model-profile";
 import { resolveModelProfile } from "./harness/model-profile";
 import { createHarnessModel, createHarnessModels } from "./harness/spark-model";
+import { goalSystemContext } from "./goal-prompt";
 import { harnessSessions, harnessStoreRoot } from "./harness-sessions";
 import { getGlobalSingleton } from "./instances";
 import {
@@ -132,6 +137,17 @@ function userMessage(text: string, images: AgentImageInput[] = []): AgentMessage
   };
 }
 
+/**
+ * Same rule as pi's `expandPromptTemplate`: a message that is exactly
+ * `/name [args]` becomes the template body with `$1`, `$@`, `$ARGUMENTS`
+ * substituted; anything else is sent as typed.
+ */
+export function expandPromptTemplate(text: string, templates: readonly PromptTemplate[]): string {
+  const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
+  const template = match ? templates.find((candidate) => candidate.name === match[1]) : undefined;
+  return template ? substituteArgs(template.content, parseCommandArgs(match![2] ?? "")) : text;
+}
+
 function textOf(message: AgentMessage): string {
   if (message.role !== "user") return "";
   if (typeof message.content === "string") return message.content;
@@ -154,6 +170,8 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   private currentSessionId: string | null = null;
   private currentStartOptions: RuntimeStartOptions = {};
   private manualCompaction = false;
+  /** The composer's selected prompt templates, loaded once per session start like pi did. */
+  private promptTemplates: PromptTemplate[] = [];
   /** Texts waiting in the Agent's queues, in order — the Agent does not expose them. */
   private queued: { steering: string[]; followUp: string[] } = { steering: [], followUp: [] };
 
@@ -205,7 +223,9 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       ...withTimeoutPolicy(createDefaultTools(resolvedCwd, ace), env),
       ...(await builtinTools({ cwd: resolvedCwd, sessionId, modelId, env, request: this.#request, gates: sessionOptions.toolGates })),
     ];
-    const { skills } = await loadSkills(new NodeExecutionEnv({ cwd: resolvedCwd }), sessionOptions.skills);
+    const executionEnv = new NodeExecutionEnv({ cwd: resolvedCwd });
+    const { skills } = await loadSkills(executionEnv, sessionOptions.skills);
+    const { promptTemplates } = await loadPromptTemplates(executionEnv, sessionOptions.promptTemplatePaths);
     const systemPrompt = withAgentPolicy(
       [DEFAULT_SYSTEM_PROMPT, ...(profile.vision ? [VISION_GUIDANCE] : []), ...(skills.length > 0 ? [formatSkillsForSystemPrompt(skills)] : [])].join(
         "\n\n",
@@ -234,6 +254,17 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       );
     }
 
+    // The session goal steers every turn, including the ones the user types, and
+    // is re-read per turn so a mid-session edit lands on the next prompt.
+    harness.hooks.on(
+      "transform_context",
+      () => {
+        const section = goalSystemContext(sessionId);
+        return section ? { systemContext: [section] } : undefined;
+      },
+      { id: "local-studio-goal" },
+    );
+
     const offLoop = harness.events.on("loop", (event) => this.onLoopEvent(event as PiEvent));
     const offJournal = harness.journal.subscribe((record) => {
       if (record.type !== "ace.history-compaction") return;
@@ -251,6 +282,7 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
     };
     this.harness = harness;
     this.profile = profile;
+    this.promptTemplates = promptTemplates;
     this.currentModelId = modelId;
     this.currentCwd = resolvedCwd;
     this.currentSessionId = sessionId;
@@ -280,7 +312,7 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   }
 
   async prompt(
-    message: string,
+    text: string,
     onEvent: (event: PiEvent, seq: number) => void,
     options: PiPromptOptions = {},
   ): Promise<void> {
@@ -288,6 +320,7 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
     this.on("loggedEvent", listener);
     try {
       const harness = this.requireHarness();
+      const message = expandPromptTemplate(text, this.promptTemplates);
       if (this.status.active) {
         // Same as pi: a prompt during a run is queued, steering unless told otherwise.
         if (options.streamingBehavior === "followUp") await this.followUp(message, options.images);
