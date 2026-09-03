@@ -8,8 +8,10 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { type Static, type TSchema, Type } from "@earendil-works/pi-ai";
 import { IDE_RUN_COMMAND_ALLOWLIST, type IdeActionName, type IdeActionParams } from "@metactivity/protocol";
-import { ideBridge, type IdeBridgeServer } from "../ide-bridge/server";
+import { ideBridge, IdeBridgeError, type IdeBridgeServer } from "../ide-bridge/server";
+import { runInIdeTerminal } from "../ide-bridge/terminals";
 import { asText, failure, type HarnessTool, textResult } from "./context";
+import { bashTimeoutFor } from "./policies";
 
 type ToolSpec<S extends TSchema, M extends IdeActionName> = {
   name: string;
@@ -172,6 +174,33 @@ const TOOLS = [
     method: "ide.fs.delete",
     params: (p, cwd) => ({ uri: insideUri(cwd, p.path), ...(p.recursive !== undefined ? { recursive: p.recursive } : {}) }),
   }),
+  // ─── M7 tasks and git (the terminal tool is built apart, below) ───
+  define({
+    name: "ide_run_task",
+    label: "IDE run task",
+    description: "Run a workspace task by name (tasks.json or a task provider) in the editor and wait for it; returns the exit code and the diagnostics totals afterwards.",
+    parameters: Type.Object({ name: Type.String() }),
+    method: "ide.runTask",
+    params: (p) => ({ name: p.name }),
+    timeoutMs: 600_000,
+  }),
+  define({
+    name: "ide_git_status",
+    label: "IDE git status",
+    description: "The editor's git view of the workspace: branch, ahead/behind, and the changed files with their status.",
+    parameters: Type.Object({}),
+    method: "ide.git.status",
+    params: () => ({}),
+  }),
+  define({
+    name: "ide_git_diff",
+    label: "IDE git diff",
+    description: "The git diff text of one file or of the whole worktree against HEAD; staged=true reads the index.",
+    parameters: Type.Object({ path: Type.Optional(pathParam), staged: Type.Optional(Type.Boolean()) }),
+    method: "ide.git.diff",
+    params: (p, cwd) => ({ ...(p.path ? { uri: toUri(cwd, p.path) } : {}), ...(p.staged !== undefined ? { staged: p.staged } : {}) }),
+    timeoutMs: 30_000,
+  }),
   define({
     name: "ide_run_command",
     label: "IDE run command",
@@ -182,10 +211,41 @@ const TOOLS = [
   }),
 ];
 
-export const IDE_TOOL_NAMES = TOOLS.map((tool) => tool.name);
+const terminalSchema = Type.Object({
+  command: Type.String({ description: "Shell command to run in the IDE terminal" }),
+  name: Type.Optional(Type.String({ description: "Terminal name (one terminal per name, reused); default \"agent\"" })),
+  timeout: Type.Optional(Type.Number({ description: "Timeout in seconds" })),
+});
 
-export function ideTools(cwd: string, bridge: IdeBridgeServer = ideBridge()): HarnessTool[] {
-  return TOOLS.map((tool) => ({
+/** `ide.runTerminal` as a tool: the same gate class as `bash` (the command decides), the same result shape. */
+function terminalTool(cwd: string, sessionId: string, env: NodeJS.ProcessEnv, bridge: IdeBridgeServer): HarnessTool {
+  return {
+    name: "ide_run_terminal",
+    label: "IDE terminal",
+    description:
+      "Run a shell command in a terminal of the user's editor (visible to them) and return its output and exit code. Use it for tests, builds and long-running commands the user should see.",
+    parameters: terminalSchema,
+    async execute(_id, params, _signal, onUpdate) {
+      const { command, name, timeout } = params as Static<typeof terminalSchema>;
+      try {
+        return await runInIdeTerminal({ cwd, sessionId, command, ...(name ? { name } : {}), timeoutMs: bashTimeoutFor(env, timeout) * 1000 }, onUpdate, bridge);
+      } catch (error) {
+        if (error instanceof IdeBridgeError) return failure(`IDE action failed: ${error.message}`, { method: "ide.runTerminal" });
+        throw error;
+      }
+    },
+  };
+}
+
+export const IDE_TOOL_NAMES = [...TOOLS.map((tool) => tool.name), "ide_run_terminal"];
+
+export interface IdeToolsOptions {
+  sessionId?: string;
+  env?: NodeJS.ProcessEnv;
+}
+
+export function ideTools(cwd: string, bridge: IdeBridgeServer = ideBridge(), options: IdeToolsOptions = {}): HarnessTool[] {
+  const actions: HarnessTool[] = TOOLS.map((tool) => ({
     name: tool.name,
     label: tool.label,
     description: tool.description,
@@ -205,4 +265,5 @@ export function ideTools(cwd: string, bridge: IdeBridgeServer = ideBridge()): Ha
       }
     },
   }));
+  return [...actions, terminalTool(cwd, options.sessionId ?? "", options.env ?? process.env, bridge)];
 }

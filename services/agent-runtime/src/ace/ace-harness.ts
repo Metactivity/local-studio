@@ -192,6 +192,8 @@ export interface AceHarnessOptions {
   sessionId?: string;
   /** Resume an already-open session instead of creating one; its branch seeds the transcript. */
   session?: Session;
+  /** Facts the transcript cannot carry (M7: the IDE's diagnostics), merged into the phase report before `before_run_end`. */
+  phaseExtras?: (turnId: string) => Partial<AcePhaseReport>;
 }
 
 export interface TurnOptions {
@@ -555,7 +557,7 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
     const assistant = [...runMessages].reverse().find((message) => message.role === "assistant");
     const stopReason = assistant?.role === "assistant" ? assistant.stopReason : "error";
     const errorMessage = assistant?.role === "assistant" ? assistant.errorMessage : "no assistant message";
-    const phase = phaseReport(runMessages, errorMessage);
+    const phase = { ...phaseReport(runMessages, errorMessage), ...options.phaseExtras?.(turnId) };
     await hooks.run("before_run_end", { turnId, prompt: text, messages: [...runMessages], stopReason, phase } satisfies BeforeRunEndEvent);
     aep.emit("turn.completed", { stopReason, model: model.id }, turnId);
 

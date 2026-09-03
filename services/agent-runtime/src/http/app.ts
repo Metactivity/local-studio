@@ -120,6 +120,7 @@ import {
   handleCheckpointShow,
   handleCheckpointsList,
   handleIdeContext,
+  handleIdeTerminals,
   handlePermissionAnswer,
   handlePermissionsList,
 } from "./ide-handlers";
@@ -173,6 +174,7 @@ export function createAgentRuntimeApp() {
   app.post("/api/agent/ace/rebuild-graph", (c) => handleAceRebuildGraph(c.req.raw));
   app.post("/api/agent/ace/restart", () => handleAceRestart());
   app.get("/api/agent/ide/context", (c) => handleIdeContext(c.req.raw));
+  app.get("/api/agent/ide/terminals", (c) => handleIdeTerminals(c.req.raw));
   app.get("/api/agent/checkpoints", (c) => handleCheckpointsList(c.req.raw));
   app.post("/api/agent/checkpoints/revert", (c) => handleCheckpointRevert(c.req.raw));
   app.post("/api/agent/checkpoints/show", (c) => handleCheckpointShow(c.req.raw));
