@@ -4,6 +4,8 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { Effect } from "effect";
 import { listProjectsFromStore, resolveAllowedWorkspace } from "./projects-store";
+import { resolveDataDir } from "./data-dir";
+import { CHATS_PROJECT_ID } from "../../../shared/agent/project-ids";
 import { hasEnabledConnectorsSync } from "./connectors-service";
 import { githubCliPathSync, hasGithubCliSync } from "./github-cli";
 import { hasObsidianVaultSync, listObsidianVaultsSync } from "./obsidian-vault";
@@ -64,10 +66,13 @@ type AgentSessionOptions = {
 };
 
 function resolveDefaultAgentCwd(): string {
-  if (process.env.LOCAL_STUDIO_AGENT_CWD) return process.env.LOCAL_STUDIO_AGENT_CWD;
+  // The runtime data dir is never a project (MET-933): neither the env fallback nor the pinned "Chats" entry.
+  const dataDir = resolveDataDir();
+  const configured = process.env.LOCAL_STUDIO_AGENT_CWD;
+  if (configured && path.resolve(configured) !== dataDir) return configured;
 
   try {
-    const usable = listProjectsFromStore().find((entry) => entry.exists);
+    const usable = listProjectsFromStore().find((entry) => entry.exists && entry.id !== CHATS_PROJECT_ID);
     if (usable) return usable.path;
   } catch {
     // The project registry is optional during first run.

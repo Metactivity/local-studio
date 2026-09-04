@@ -1,3 +1,4 @@
+import { defaultProjectId } from "@shared/agent/default-project";
 import * as defaultApi from "@/features/agent/projects/api";
 import type { Project, ProjectId } from "@/features/agent/projects/types";
 
@@ -125,8 +126,7 @@ function resolveSelectedProjectId(
   current: ProjectId | null,
   projects: readonly Project[],
 ): ProjectId | null {
-  if (current && projects.some((project) => project.id === current)) return current;
-  return projects[0]?.id ?? null;
+  return defaultProjectId(projects, current);
 }
 
 const SELECTED_PROJECT_KEY = "local-studio.agent.selectedProjectId";
