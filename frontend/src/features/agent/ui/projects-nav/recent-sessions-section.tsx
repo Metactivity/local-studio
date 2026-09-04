@@ -1,5 +1,6 @@
 "use client";
 
+import { agentWorkspaceHref } from "@shared/agent/agent-mode";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type MouseEvent } from "react";
@@ -138,10 +139,8 @@ function matchingOpen(
   return opens.find((open) => open.threadId === session.id || open.id === session.id);
 }
 
-function sessionHref(projectId: string, sessionId: string | null | undefined): string {
-  const sessionParam = sessionId ? `&session=${encodeURIComponent(sessionId)}` : "";
-  return `/ide?project=${encodeURIComponent(projectId)}${sessionParam}&replace=1`;
-}
+const sessionHref = (projectId: string, sessionId: string | null | undefined) =>
+  agentWorkspaceHref(projectId, sessionId ? { session: sessionId } : null);
 
 function readCollapsed(): Set<string> {
   try {

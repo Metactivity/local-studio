@@ -28,6 +28,7 @@ import {
   resolveFileOpenTarget,
 } from "@/features/agent/ui/assistant-media";
 import { openInIde } from "@/features/ace/api";
+import { OPEN_IN_IDE_EVENT, type OpenInIdeDetail } from "@/features/agent/ui/agent-workspace";
 
 const FILE_REF_PATTERN =
   /^(?:file:\/\/|~\/|\.{1,2}\/|\/|[\w.-]+\/)[^\s`'")]+(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)(?::\d+(?::\d+)?)?$/;
@@ -207,6 +208,12 @@ type ToolHandlers = {
 function openFileInIde(raw: string, cwd: string | null) {
   const target = resolveFileOpenTarget(cleanFileReference(raw), cwd);
   if (!target || target.kind !== "file") return;
+  // Chat mode has no workbench on the page: the workspace switches to IDE mode first.
+  if (window.location.pathname === "/chat") {
+    const detail: OpenInIdeDetail = { cwd: target.root, path: target.rel };
+    window.dispatchEvent(new CustomEvent(OPEN_IN_IDE_EVENT, { detail }));
+    return;
+  }
   void openInIde(target.root, target.rel).catch(() => undefined);
 }
 

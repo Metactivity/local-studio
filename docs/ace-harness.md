@@ -284,8 +284,8 @@ phase report carries the validation verdict and the IDE's error count for the wr
 ### M8 — what Local Studio no longer implements (MET-931)
 
 The IDE is the workbench: nothing in the frontend or the runtime duplicates Code-OSS for files, git, terminal or
-diff any more. `/agent` redirects to `/ide` (query params carry over: `?project=&session=&new=`); `/agent/automations`
-and `/quick` stay.
+diff any more. `/agent` redirects to `/chat` (query params carry over: `?project=&session=&new=`); `/agent/automations`
+and `/quick` stay. The IDE is one of two modes since MET-934 — see [Modes](#modes-met-934).
 
 | Gone | Replaced by |
 | --- | --- |
@@ -298,6 +298,20 @@ Still here on purpose: `GET /api/agent/fs/search` and `GET /api/agent/fs/file` (
 picker), `GET /api/agent/fs/raw` (inline media in the timeline), `highlight-cache.ts` (code blocks in the timeline),
 the harness `read` / `edit` / `grep` / `bash` tools (runtime tools, not UI), every `ide_*` tool, the runtime's
 project branch lookup for the nav, and the Electron desktop's own pty manager (`frontend/desktop/logic/`).
+
+## Modes (MET-934)
+
+The IDE is one mode, not the mandatory one. `/chat` is the classic full-width workspace — composer, timeline,
+queue strip, changes strip, with Browser / Context / Memory / ACE as a resizable right column and no workbench
+iframe (no reh-web connection, no bridge session for that tab). `/ide` is the same components with the Code-OSS
+workbench in the centre and the chat as a tab of the right column. Both routes share one `(workspace)` layout, so
+the sessions, the running turn and its SSE subscription survive a mode switch; `/agent` redirects to `/chat`.
+
+The mode is remembered per project (`shared/agent/agent-mode.ts`, localStorage `local-studio.agentMode.<id>`):
+a bare `/chat` or `/ide` (nav rail, panel switch) is an explicit choice, a deep link (`?project=&session=&new=`)
+reopens the project in its last mode, chat by default. In Chat mode the Context tab offers the switch, and a
+file link in the timeline switches to IDE mode and opens the file once the bridge reports the folder connected
+(`tuum:open-in-ide` window event, bounded 60 s wait). `ide_*` tools stay unregistered while no IDE is connected.
 
 ## Identity (ADR-034 M9)
 

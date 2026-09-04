@@ -277,7 +277,7 @@ function useActiveSessionEffects({
   }, [viewKey, viewAlias, setActiveComputerSession]);
 }
 
-export function AgentWorkspace({ compact }: { compact?: boolean } = {}) {
+export function QuickAgentWorkspace({ compact }: { compact?: boolean } = {}) {
   const { state, dispatch, handles } = useWorkspace({ ephemeral: Boolean(compact) });
   return (
     <AgentWorkspaceShell state={state} dispatch={dispatch} handles={handles} compact={compact} />

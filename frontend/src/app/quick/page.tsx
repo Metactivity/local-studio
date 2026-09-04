@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import { AgentWorkspace } from "@/features/agent/ui/agent-workspace-shell";
+import { QuickAgentWorkspace } from "@/features/agent/ui/agent-workspace-shell";
 import { ToolsProvider } from "@/features/agent/tools/context";
 import { getQuickPanelBridge } from "@/features/agent/ui/quick-panel/quick-panel-bridge";
 import { useMountSubscription } from "@/hooks/use-mount-subscription";
@@ -25,7 +25,7 @@ export default function QuickPanelPage() {
   return (
     <ToolsProvider>
       <Suspense fallback={null}>
-        <AgentWorkspace compact />
+        <QuickAgentWorkspace compact />
       </Suspense>
     </ToolsProvider>
   );
