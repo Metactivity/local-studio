@@ -11,6 +11,7 @@ import {
 } from "@/features/ace/api";
 import { useAceResource } from "@/features/ace/use-ace-resource";
 import { AcePanelNotice } from "@/features/ace/ace-panel-notice";
+import { BrowserBridgePairing } from "@/features/ace/browser-bridge-pairing";
 import { TUUM } from "@/lib/tuum-identity";
 import { TuumEmptyState, TuumStatusIndicator, type TuumStatusState } from "@/ui/tuum";
 
@@ -191,6 +192,7 @@ export function AceStatusTab({ cwd }: { cwd: string }) {
         </Button>
       </div>
       {notice ? <AcePanelNotice>{notice}</AcePanelNotice> : null}
+      <BrowserBridgePairing />
     </div>
   );
 }

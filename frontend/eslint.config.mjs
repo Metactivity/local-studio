@@ -69,6 +69,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "desktop/dist/**",
+    // Its own package (bun build, @types/chrome), not part of the Next tree.
+    "desktop/browser-bridge-extension/**",
     "dist-desktop/**",
     "dist-desktop-dev/**",
   ]),

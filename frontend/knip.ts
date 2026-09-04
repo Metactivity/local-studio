@@ -6,7 +6,7 @@ const config = {
     "desktop/app-identity.ts",
   ],
   project: ["src/**/*.{ts,tsx}", "desktop/**/*.{ts,tsx}"],
-  ignore: [".next/**", ".next-dev/**", "node_modules/**"],
+  ignore: [".next/**", ".next-dev/**", "node_modules/**", "desktop/browser-bridge-extension/**"],
   ignoreIssues: {
     "desktop/interfaces.ts": ["types"],
   },

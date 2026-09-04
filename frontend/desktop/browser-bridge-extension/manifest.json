@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Tuum Browser Bridge",
+  "version": "0.1.0",
+  "description": "Lets a Tuum / Local Studio station drive this browser through its chrome_* tools, after pairing and only when you allow actions.",
+  "permissions": ["tabs", "scripting", "activeTab", "storage", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "Tuum Browser Bridge" }
+}
