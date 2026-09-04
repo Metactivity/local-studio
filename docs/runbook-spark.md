@@ -36,6 +36,13 @@ posts `/launch/<recipe>` once the controller answers) and
 unit carries no `--default-folder`. Every long-running unit has
 `Restart=on-failure`.
 
+`localstudio-frontend` carries a drop-in (`localstudio-frontend.service.d/override.conf`)
+with `TimeoutStopSec=10`: the launcher forwards SIGTERM to the Next server
+only, so without it a restart waits the 90 s default, the runtime child keeps
+8081 alive, and a new launcher silently reuses that stale runtime instead of
+starting the freshly built one (`start.mjs` skips the spawn when `/health`
+already answers). Ten seconds, then systemd kills the whole control group.
+
 The frontend unit's `PATH` starts with `%h/.bun/bin`: the launcher and the
 build need bun. Run anything by hand from a login shell (`bash -lc '…'`) for
 the same reason — a build from a non-login shell once removed
@@ -98,9 +105,11 @@ ssh <user>@<station> bash -lc '/opt/ai/local-studio/scripts/deploy-spark.sh'
 `frontend`, restart `localstudio-frontend`, wait for `/health` on 8081 and
 `/ide` on 4783 (with the production Host header, read from `.env.local`).
 Before building it moves the current `frontend/.next` and
-`services/agent-runtime/dist` to `.prev`; a failed build restores them and
-leaves the unit running on the old files, a failed health check restores them
-and restarts. `--dry-run` prints the steps, `--no-pull` builds the checkout as
+`services/agent-runtime/dist` to `.prev`; a failed build restores them, a
+failed health check restores them and restarts. Expect the unit to flap
+during the build (`npm ci` pulls the tree from under the running server;
+systemd retries every 5 s against a missing bundle) — the final restart
+settles it on whichever build is on disk. Budget about four minutes. `--dry-run` prints the steps, `--no-pull` builds the checkout as
 is. The controller is not touched (restart it by hand when `controller/`
 changed).
 
