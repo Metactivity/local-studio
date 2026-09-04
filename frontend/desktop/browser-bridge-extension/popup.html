@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tuum Browser Bridge</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 12px 14px;
+        width: 300px;
+        font: 13px/1.4 system-ui, sans-serif;
+        color: #1f2937;
+        background: #fff;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 14px;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: 5.5em 1fr;
+        gap: 4px 8px;
+        margin: 0 0 10px;
+      }
+      dt {
+        color: #6b7280;
+      }
+      dd {
+        margin: 0;
+        font-family: ui-monospace, monospace;
+        overflow-wrap: anywhere;
+      }
+      #status[data-state="connected"] {
+        color: #15803d;
+      }
+      #status[data-state="error"],
+      #error {
+        color: #b91c1c;
+      }
+      label.switch {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 0;
+        border-top: 1px solid #e5e7eb;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 10px;
+      }
+      form {
+        display: grid;
+        gap: 6px;
+      }
+      input {
+        font: inherit;
+        padding: 4px 6px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+      }
+      button {
+        font: inherit;
+        padding: 5px 10px;
+        border: 1px solid #9ca3af;
+        border-radius: 4px;
+        background: #f9fafb;
+        cursor: pointer;
+      }
+      small {
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Tuum Browser Bridge</h1>
+    <dl>
+      <dt>State</dt>
+      <dd><span id="status">…</span> <span id="error"></span></dd>
+      <dt>Station</dt>
+      <dd id="station">…</dd>
+    </dl>
+    <label class="switch">
+      <input type="checkbox" id="act" />
+      <span>Allow actions (click, fill, eval)<br /><small>Off = read-only: pages can be read, never touched.</small></span>
+    </label>
+    <form id="pair">
+      <input id="url" type="url" placeholder="Station URL, e.g. http://127.0.0.1:8081" required />
+      <input id="code" inputmode="numeric" pattern="[0-9]{6}" placeholder="6-digit pairing code" required />
+      <div>
+        <button type="submit">Pair</button>
+        <button type="button" id="forget" hidden>Forget</button>
+      </div>
+    </form>
+    <script src="popup.js"></script>
+  </body>
+</html>
