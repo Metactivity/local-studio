@@ -1,5 +1,6 @@
 import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
+import { registerBunOAuthFlows } from "@earendil-works/pi-ai/bun-oauth";
 import { agentCore } from "./agent-core";
 import { attachBrowserBridgeWs } from "./browser-bridge/ws";
 import { startAutomationScheduler } from "./automation-scheduler";
@@ -8,6 +9,8 @@ import { createAgentRuntimeApp } from "./http/app";
 import { watchWorkspaceChanges } from "./harness-runtime";
 import { ideBridge } from "./ide-bridge/server";
 
+// pi-ai loads OAuth flows through a computed import that the bundle cannot resolve; register them statically.
+registerBunOAuthFlows();
 agentCore();
 startAutomationScheduler();
 // The embedded workbench connects here (ADR-034 M5); a failed listen is logged, the runtime still serves.
