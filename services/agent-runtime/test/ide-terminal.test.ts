@@ -71,7 +71,7 @@ describe("gate: ide_run_terminal", () => {
     expect(classifyToolAccess("ide_git_diff", {})).toBe("read");
     expect(decideToolCall({ profile: "standard", cwd, toolName: "ide_run_terminal", args: { command: "bun test" } }, NO_RULES)).toEqual({ allow: true, access: "exec-read" });
     expect(decideToolCall({ profile: "standard", cwd, toolName: "ide_run_terminal", args: { command: "rm -rf dist" } }, NO_RULES)).toMatchObject({ allow: false, ask: true, access: "exec-write" });
-    expect(decideToolCall({ profile: "standard", cwd, toolName: "bash", args: { command: "rm -rf dist" } }, NO_RULES)).not.toHaveProperty("ask");
+    expect(decideToolCall({ profile: "standard", cwd, toolName: "bash", args: { command: "rm -rf dist" } }, NO_RULES)).toMatchObject({ allow: false, ask: true, access: "exec-write" });
     expect(decideToolCall({ profile: "safe", cwd, toolName: "ide_run_terminal", args: { command: "bun test" } }, NO_RULES)).toMatchObject({ allow: false, source: "profile" });
     expect(decideToolCall({ profile: "standard", cwd, toolName: "ide_run_terminal", args: { command: "git commit --no-verify -m x" } }, NO_RULES)).toMatchObject({ source: "block-no-verify" });
   });

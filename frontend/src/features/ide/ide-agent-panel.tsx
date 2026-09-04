@@ -15,8 +15,10 @@ import { IdeChangesStrip } from "@/features/ide/ide-changes-strip";
 import { providerBadgeState } from "@/features/ide/provider-state";
 import { loadAceProposals, loadIdeContext } from "@/features/ace/api";
 import { useAceResource } from "@/features/ace/use-ace-resource";
+import { addProjectFromPath, openProjectDirectory } from "@/features/agent/projects/api";
 import { useProjects } from "@/features/agent/projects/context";
-import type { Project } from "@/features/agent/projects/types";
+import { isChatsProject, type Project } from "@/features/agent/projects/types";
+import { ProjectDirectoryPickerModal } from "@/features/agent/ui/projects-nav/directory-picker-modal";
 import { focusedSession } from "@/features/agent/runtime/selectors";
 import { safeJson } from "@/features/agent/safe-json";
 import {
@@ -44,6 +46,8 @@ const LazyAgentBrowser = lazy(() =>
 type PanelTab = "chat" | "browser" | "context" | "memory" | "ace";
 
 // Kit product icons where one fits the tab; Lucide for the browser.
+const ADD_FOLDER = "__add_folder__";
+
 const TABS: { id: PanelTab; label: string; icon: TuumIconName | null }[] = [
   { id: "chat", label: "Chat", icon: "agent-session" },
   { id: "browser", label: "Browser", icon: null },
@@ -105,9 +109,15 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
   const focused = focusedSession(state);
   const piSessionId = focused?.piSessionId ?? null;
   const [tab, setTab] = useState<PanelTab>("chat");
+  const [folderPicker, setFolderPicker] = useState<{ open: boolean; error: string }>({
+    open: false,
+    error: "",
+  });
   const searchParams = useSearchParams();
   const nonce = useRef(0);
   const handled = useRef({ nav: "", projectId: "" });
+  // The switcher lists real folders only: the "Chats" entry is the runtime data dir (MET-933).
+  const realProjects = projects.projects.filter((entry) => !isChatsProject(entry));
 
   const sessions = useAceResource(cwd ? () => loadRecentSessions(cwd) : null, [cwd, piSessionId]);
   const proposals = useAceResource(cwd ? () => loadAceProposals(cwd) : null, [
@@ -133,7 +143,9 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
     const nav = searchParams.toString();
     if (nav && handled.current.nav !== nav) {
       handled.current.nav = nav;
-      const target = projects.findById(searchParams.get("project") ?? "") ?? project;
+      const requested = projects.findById(searchParams.get("project") ?? "") ?? project;
+      // `?project=chats` (a sidebar row) never opens the data dir: the first real folder stands in.
+      const target = isChatsProject(requested) ? (realProjects[0] ?? null) : requested;
       if (!target) return;
       handled.current.projectId = target.id;
       if (target !== project) projects.selectProject(target);
@@ -157,6 +169,40 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
     if (!project) return;
     open(project, sessionId);
     setTab("chat");
+  };
+
+  // "Add folder…" reuses the sidebar's add-project flow: the desktop picker when
+  // the bridge has one, else the in-app directory picker over the runtime.
+  const addFolder = async () => {
+    setFolderPicker({ open: false, error: "" });
+    try {
+      const result = await openProjectDirectory();
+      if (result.source === "fallback") setFolderPicker({ open: true, error: "" });
+      else if (result.project) projects.upsertProject(result.project);
+    } catch (error) {
+      setFolderPicker({
+        open: true,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+  const folderPicked = async (path: string) => {
+    try {
+      const added = await addProjectFromPath(path);
+      projects.upsertProject(added);
+      projects.selectProject(added);
+      setFolderPicker({ open: false, error: "" });
+    } catch (error) {
+      setFolderPicker({
+        open: true,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+  const pickProject = (value: string) => {
+    if (value === ADD_FOLDER) return void addFolder();
+    const next = projects.findById(value);
+    if (next && next !== project) projects.selectProject(next);
   };
 
   const listed = sessions.data ?? [];
@@ -202,6 +248,21 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
         ))}
       </nav>
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-(--border)/60 px-2">
+        <select
+          value={project && !isChatsProject(project) ? project.id : ""}
+          aria-label="Project"
+          title={project?.path}
+          onChange={(event) => pickProject(event.target.value)}
+          className="h-6 min-w-0 max-w-[45%] flex-1 rounded-md border border-(--border) bg-transparent px-1.5 text-[length:var(--fs-sm)] text-(--fg)"
+        >
+          {realProjects.length === 0 ? <option value="">No project</option> : null}
+          {realProjects.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
+            </option>
+          ))}
+          <option value={ADD_FOLDER}>Add folder…</option>
+        </select>
         <select
           value={piSessionId ?? ""}
           disabled={!project}
@@ -309,6 +370,12 @@ export function IdeAgentPanel({ connected }: { connected: boolean }) {
       ) : null}
       {tab === "memory" ? <AceMemoryTab cwd={cwd} proposals={proposals} /> : null}
       {tab === "ace" ? <AceStatusTab cwd={cwd} /> : null}
+      <ProjectDirectoryPickerModal
+        open={folderPicker.open}
+        error={folderPicker.error}
+        onClose={() => setFolderPicker({ open: false, error: "" })}
+        onSelect={(path) => void folderPicked(path)}
+      />
     </aside>
   );
 }
