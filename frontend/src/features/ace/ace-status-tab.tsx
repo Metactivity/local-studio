@@ -11,6 +11,7 @@ import {
 } from "@/features/ace/api";
 import { useAceResource } from "@/features/ace/use-ace-resource";
 import { AcePanelNotice } from "@/features/ace/ace-panel-notice";
+import { BrowserBridgePairing } from "@/features/ace/browser-bridge-pairing";
 
 function healthTone(health: string | undefined): MeterTone {
   if (health === "ready") return "ok";
@@ -167,6 +168,7 @@ export function AceStatusTab({ cwd }: { cwd: string }) {
         </Button>
       </div>
       {notice ? <AcePanelNotice>{notice}</AcePanelNotice> : null}
+      <BrowserBridgePairing />
     </div>
   );
 }

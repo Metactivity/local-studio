@@ -212,3 +212,19 @@ export const loadPendingPermissions = (cwd: string) =>
 
 export const answerPermission = (requestId: string, decision: "allow" | "deny") =>
   post<{ ok: boolean }>(`/api/agent/permissions/${encodeURIComponent(requestId)}`, { decision });
+
+// ─── W10: the Browser Bridge pairing card (MET-921) ───────────────────────
+
+export type BrowserBridgeStatus = {
+  sessionId: string;
+  paired: boolean;
+  connected: boolean;
+  readOnly: boolean | null;
+  pairing: { code: string; expiresAt: string } | null;
+  stationUrl: string;
+};
+
+export const loadBrowserBridgeStatus = () => call<BrowserBridgeStatus>("/api/agent/bridge/status");
+
+export const startBrowserBridgePairing = () =>
+  post<{ code: string; expiresAt: string; stationUrl: string }>("/api/agent/bridge/pair/start", {});
