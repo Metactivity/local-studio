@@ -309,7 +309,12 @@ the sessions, the running turn and its SSE subscription survive a mode switch; `
 
 The mode is remembered per project (`shared/agent/agent-mode.ts`, localStorage `local-studio.agentMode.<id>`):
 a bare `/chat` or `/ide` (nav rail, panel switch) is an explicit choice, a deep link (`?project=&session=&new=`)
-reopens the project in its last mode, chat by default. In Chat mode the Context tab offers the switch, and a
+reopens the project in its last mode, chat by default. Chat mode needs no folder: the "Chats" scope (the runtime
+data dir) is the default, and the runtime treats a session whose cwd is the data dir as the **general assistant**
+(`GENERAL_SYSTEM_PROMPT`, no read/grep/find/ls/write/edit/bash, no project context files, no cwd line; browser,
+connectors, skills, subagents, automations and ACE memory stay; `ide_*` never register — no IDE folder). Picking a
+project in the header attaches it to the running session (next turn restarts the harness on that cwd with the
+project tools); switching to IDE from a project-less chat asks for that pick and keeps the session. In Chat mode the Context tab offers the switch, and a
 file link in the timeline switches to IDE mode and opens the file once the bridge reports the folder connected
 (`tuum:open-in-ide` window event, bounded 60 s wait). `ide_*` tools stay unregistered while no IDE is connected.
 
