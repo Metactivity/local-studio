@@ -1,8 +1,10 @@
 // The IDE Bridge server (ADR-034 §2.2): a Unix socket the `ace-agent`
 // extension of the embedded workbench connects to, newline-delimited JSON-RPC
-// 2.0. One connection per workspace folder (a new hello for the same folder
-// replaces the old one); events update the per-folder context, `ace/*`
-// requests hit the runtime's ACE, and the harness sends `ide.*` actions back.
+// 2.0. Every browser tab on a folder runs its own extension host, so a folder
+// keeps all its connections; the active one (last hello or `ide.*` event,
+// heartbeats aside) answers `context()` and receives the harness's `ide.*`
+// actions, events update the emitting connection's own context, `ace/*`
+// requests hit the runtime's ACE.
 
 import { chmodSync, existsSync, unlinkSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
@@ -66,6 +68,7 @@ interface Pending {
 class IdeConnection {
   context: IdeContext | null = null;
   folder: string | null = null;
+  lastActiveAt = 0;
   #buffer = "";
   #nextId = 1;
   readonly #pending = new Map<JsonRpcId, Pending>();
@@ -154,6 +157,7 @@ class IdeConnection {
     }
     this.folder = folder;
     this.context = emptyContext(request.params);
+    this.lastActiveAt = this.bridge.tick();
     this.bridge.attach(folder, this);
     const ack: IdeHelloAck = { protocolVersion: IDE_PROTOCOL_VERSION, runtimeVersion: this.bridge.runtimeVersion };
     this.write(rpcSuccess(request.id, ack));
@@ -164,6 +168,7 @@ class IdeConnection {
     if (this.folder === null || this.context === null) return;
     if (isIdeEventName(method)) {
       this.context = applyIdeEvent(this.context, method, params);
+      if (method !== "ide.heartbeat") this.lastActiveAt = this.bridge.tick();
       this.bridge.onEvent(this.folder, method, params);
       return;
     }
@@ -221,7 +226,8 @@ export class IdeBridgeServer {
   readonly runtimeVersion: string;
   readonly heartbeatTimeoutMs: number;
   readonly log: (message: string) => void;
-  readonly #connections = new Map<string, IdeConnection>();
+  readonly #connections = new Map<string, IdeConnection[]>();
+  #clock = 0;
   readonly #listeners = new Set<(folder: string, method: string, params: unknown) => void>();
   #server: Server | null = null;
 
@@ -251,7 +257,7 @@ export class IdeBridgeServer {
   }
 
   async close(): Promise<void> {
-    for (const connection of this.#connections.values()) connection.socket.destroy();
+    for (const connection of [...this.#connections.values()].flat()) connection.socket.destroy();
     this.#connections.clear();
     const server = this.#server;
     this.#server = null;
@@ -259,20 +265,35 @@ export class IdeBridgeServer {
     if (existsSync(this.socketPath)) unlinkSync(this.socketPath);
   }
 
+  /** Monotonic activity stamp: a counter, so two hellos in the same millisecond still order. */
+  tick(): number {
+    this.#clock += 1;
+    return this.#clock;
+  }
+
   attach(folder: string, connection: IdeConnection): void {
-    const previous = this.#connections.get(folder);
-    if (previous && previous !== connection) {
-      previous.folder = null;
-      previous.socket.destroy();
-    }
-    this.#connections.set(folder, connection);
+    const connections = this.#connections.get(folder) ?? [];
+    if (!connections.includes(connection)) connections.push(connection);
+    this.#connections.set(folder, connections);
   }
 
   detach(folder: string, connection: IdeConnection): void {
-    if (this.#connections.get(folder) === connection) {
-      this.#connections.delete(folder);
-      this.log(`disconnected ${folder}`);
+    const remaining = (this.#connections.get(folder) ?? []).filter((candidate) => candidate !== connection);
+    if (remaining.length > 0) {
+      this.#connections.set(folder, remaining);
+      return;
     }
+    this.#connections.delete(folder);
+    this.log(`disconnected ${folder}`);
+  }
+
+  /** The most recently active connection of `folder` — the tab the user is working in. */
+  connectionFor(folder: string): IdeConnection | null {
+    let active: IdeConnection | null = null;
+    for (const connection of this.#connections.get(folder) ?? []) {
+      if (!active || connection.lastActiveAt > active.lastActiveAt) active = connection;
+    }
+    return active;
   }
 
   onEvent(folder: string, method: string, params: unknown): void {
@@ -289,12 +310,12 @@ export class IdeBridgeServer {
   }
 
   context(folder: string): IdeContext | null {
-    return this.#connections.get(folder)?.context ?? null;
+    return this.connectionFor(folder)?.context ?? null;
   }
 
   /** One typed action to the IDE of `folder`; rejects with `IdeBridgeError` when none is connected or on timeout. */
   action<M extends IdeActionName>(folder: string, method: M, params: IdeActionParams<M>, timeoutMs = DEFAULT_ACTION_TIMEOUT_MS): Promise<IdeActionResult<M>> {
-    const connection = this.#connections.get(folder);
+    const connection = this.connectionFor(folder);
     if (!connection) return Promise.reject(new IdeBridgeError(BRIDGE_UNAVAILABLE, `no IDE connected for ${folder}`));
     return connection.request(method, params, timeoutMs) as Promise<IdeActionResult<M>>;
   }
