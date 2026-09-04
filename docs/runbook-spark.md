@@ -100,18 +100,25 @@ bridge's own pairing token authenticates the socket.
 ssh <user>@<station> bash -lc '/opt/ai/local-studio/scripts/deploy-spark.sh'
 ```
 
-`scripts/deploy-spark.sh` is idempotent: fast-forward `spark`, `bun install`
-+ `bun run build` in `services/agent-runtime`, `npm ci` + `npm run build` in
-`frontend`, restart `localstudio-frontend`, wait for `/health` on 8081 and
-`/ide` on 4783 (with the production Host header, read from `.env.local`).
-Before building it moves the current `frontend/.next` and
-`services/agent-runtime/dist` to `.prev`; a failed build restores them, a
-failed health check restores them and restarts. Expect the unit to flap
-during the build (`npm ci` pulls the tree from under the running server;
-systemd retries every 5 s against a missing bundle) — the final restart
-settles it on whichever build is on disk. Budget about four minutes. `--dry-run` prints the steps, `--no-pull` builds the checkout as
-is. The controller is not touched (restart it by hand when `controller/`
-changed).
+`scripts/deploy-spark.sh` is idempotent and builds out of place: fast-forward
+`spark`, add a throwaway git worktree of the checkout at HEAD under
+`/opt/ai/local-studio-build/<sha>`, `npm run setup` + `npm run build` in it
+(the frontend build also bundles the runtime). The live tree is untouched during the build, so the
+site keeps answering from the previous build. Then, in one `mv` each,
+`frontend/.next`, `frontend/node_modules`, `services/agent-runtime/dist` and
+`services/agent-runtime/node_modules` are moved to `.prev` and the built ones
+put in their place, `localstudio-frontend` is restarted, and `/health` on 8081
+and `/ide` on 4783 (production Host header, read from `.env.local`) are
+checked. A failed build leaves the live tree and the unit alone (the build
+tree is kept for inspection, the next run replaces it); a failed health check
+moves the `.prev` outputs back and restarts. On success the worktree and the
+`.prev` copies are removed. A lock (`/opt/ai/local-studio-build/.lock`) makes
+a second concurrent run exit with a message instead of racing. Budget about
+four minutes, with the site up throughout except for the restart. `--dry-run`
+prints the steps, `--no-pull` builds the checkout as is. The registry token
+for `@metactivity/*` is read from `/etc/ai/tuum-web.env` when
+`NODE_AUTH_TOKEN` is not already set. The controller is not touched (restart
+it by hand when `controller/` changed).
 
 Rollback by hand: `git -C /opt/ai/local-studio checkout <previous sha>` then
 `scripts/deploy-spark.sh --no-pull`.
