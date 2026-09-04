@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createToolLoopGuard, decideToolCall, type ProjectRules } from "../src/ace/ace-gate";
+import { createToolLoopGuard, decideToolCall, isMutatingCommand, type ProjectRules } from "../src/ace/ace-gate";
 
 const NO_RULES: ProjectRules = { commandAllowlist: [], toolAllowlist: [], toolDenylist: [] };
 const cwd = "/tmp/ace-gate-test";
@@ -16,11 +16,38 @@ describe("ACE permission gate", () => {
     expect(allowlisted.allow).toBe(true);
   });
 
-  test("standard: edits and read-only shell pass, mutating shell is blocked", () => {
+  test("standard: edits and read-only shell pass, mutating shell asks the user (MET-933)", () => {
     expect(decideToolCall({ profile: "standard", cwd, toolName: "edit", args: { path: "a.ts" } }, NO_RULES).allow).toBe(true);
     expect(decideToolCall({ profile: "standard", cwd, toolName: "bash", args: { command: "bun test" } }, NO_RULES).allow).toBe(true);
-    const blocked = decideToolCall({ profile: "standard", cwd, toolName: "bash", args: { command: "rm -rf dist" } }, NO_RULES);
-    expect(blocked).toMatchObject({ allow: false, access: "exec-write", source: "profile" });
+    const asked = decideToolCall({ profile: "standard", cwd, toolName: "bash", args: { command: "rm -rf dist" } }, NO_RULES);
+    expect(asked).toMatchObject({ allow: false, ask: true, access: "exec-write", source: "profile" });
+    expect(decideToolCall({ profile: "safe", cwd, toolName: "bash", args: { command: "rm -rf dist" } }, NO_RULES)).not.toHaveProperty("ask");
+  });
+
+  test("bash classifier: read-only pipelines and null redirects are reads, real writes are writes", () => {
+    const reads = [
+      "find . -name '*.ts' 2>/dev/null; echo '---'; find . -name '*.md' | head -20",
+      "ls -la > /dev/null 2>&1 && echo ok",
+      "cat package.json | grep test | sort | uniq -c | wc -l",
+      "git log --oneline | head -5; git status --short",
+      "sed -n '1,20p' src/index.ts | tr -s ' ' | cut -d' ' -f1 | awk '{print $1}' | less",
+      "find . -type f -newer a.txt -exec ls -l {} \\;",
+      "curl -sS https://example.test/health | head -c 200",
+    ];
+    for (const command of reads) expect({ command, mutating: isMutatingCommand(command) }).toEqual({ command, mutating: false });
+    const writes = [
+      "echo hi > notes.txt",
+      "cat a.txt >> log.txt",
+      "ls | tee listing.txt",
+      "find . -name '*.log' -delete",
+      "find . -name '*.tmp' -exec rm {} \\;",
+      "sed -i 's/a/b/' src/index.ts",
+      "curl -o out.bin https://example.test/x",
+      "npm install left-pad",
+      "git checkout -b feature",
+      "mkdir -p build 2>/dev/null",
+    ];
+    for (const command of writes) expect({ command, mutating: isMutatingCommand(command) }).toEqual({ command, mutating: true });
   });
 
   test("autonomous: everything passes except the denylist and the safety gates", () => {

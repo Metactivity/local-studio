@@ -102,8 +102,16 @@ export function IdeChangesStrip({
           className="mb-2 rounded-md border border-(--warn)/40 bg-(--warn)/10 px-2 py-1.5"
         >
           <p className="text-(--fg)">
-            <span className="font-mono">{ask.toolName}</span> wants to write in the editor.
+            <span className="font-mono">{ask.toolName}</span>{" "}
+            {ask.toolName === "bash" || ask.toolName === "ide_run_terminal"
+              ? "wants to run a command that modifies state."
+              : "wants to write in the editor."}
           </p>
+          {typeof (ask.args as { command?: unknown })?.command === "string" ? (
+            <pre className="my-1 max-h-24 overflow-auto rounded-md bg-(--surface-2)/40 p-1.5 font-mono text-[length:var(--fs-xs)] text-(--fg)/80 whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {(ask.args as { command: string }).command}
+            </pre>
+          ) : null}
           <p className="text-[length:var(--fs-xs)] text-(--dim) [overflow-wrap:anywhere]">
             {ask.reason}
           </p>

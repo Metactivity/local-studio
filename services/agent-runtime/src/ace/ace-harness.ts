@@ -472,8 +472,11 @@ export async function createAceHarness(options: AceHarnessOptions): Promise<AceH
         aep.emit("permission.requested", { requestId, toolCallId: event.toolCall.id, capability, detail: decision.reason, options: ["allow-once", "deny"] }, event.turnId);
         const answer = await askPermission({ requestId, cwd, sessionId, toolName, args: event.args, reason: decision.reason, createdAt: new Date().toISOString() }, agent.signal);
         aep.emit("permission.resolved", { requestId, decision: answer === "allow" ? "allow-once" : "deny", by: "user" }, event.turnId);
-        journal.push(event.turnId, "ace.gate", { toolCallId: event.toolCall.id, toolName, decision: answer === "allow" ? { allow: true, access: decision.access } : { ...decision, reason: `${decision.reason} (denied)` }, loopCount: loop.count });
-        return answer === "allow" ? undefined : { block: true, reason: `${decision.reason} The user denied it.` };
+        // The settled record carries no `ask`: a denial is a block the user sees (harness-runtime turns it into a notice).
+        const { ask: _ask, ...settled } = decision;
+        const denied = { ...settled, reason: `${decision.reason} The user denied it.` };
+        journal.push(event.turnId, "ace.gate", { toolCallId: event.toolCall.id, toolName, decision: answer === "allow" ? { allow: true, access: decision.access } : denied, loopCount: loop.count });
+        return answer === "allow" ? undefined : { block: true, reason: denied.reason };
       },
       { id: "ace" },
     );

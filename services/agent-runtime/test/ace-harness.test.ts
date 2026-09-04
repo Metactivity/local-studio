@@ -4,15 +4,17 @@
 // reflection filed, the AEP stream reduced.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
+import { answerPermission, pendingPermissions } from "../src/ace/ace-gate";
 import { createAceHarness } from "../src/ace/ace-harness";
 import { createAceService } from "../src/ace/ace-service";
 import { SqliteSessionRepo } from "../src/ace/sqlite-session-repo";
 import { QWEN38_RVN_PROFILE } from "../src/harness/model-profile";
 import { createHarnessModel, createHarnessModels } from "../src/harness/spark-model";
+import { until } from "./support/fake-extension";
 import { type FakeLlamaServer, startFakeLlamaServer } from "./support/fake-llama-server";
 
 let server: FakeLlamaServer;
@@ -102,5 +104,53 @@ describe("ACE-rooted harness", () => {
     await harness.close();
     ace.dispose();
     repo.close();
+  }, 30_000);
+
+  test("standard: a mutating bash call asks; allow runs it, deny blocks it with the reason the user sees (MET-933)", async () => {
+    const askServer = startFakeLlamaServer([
+      { toolCall: { name: "bash", args: { command: "mkdir -p asked" } } },
+      { text: "Made asked." },
+      { toolCall: { name: "bash", args: { command: "mkdir -p denied" } } },
+      { text: "Could not." },
+    ]);
+    const ace = createAceService({
+      runtime: "external",
+      chatBaseUrl: askServer.url,
+      embedBaseUrl: askServer.url,
+      apiKey: "fake-key",
+      chatModel: "fake-qwen3.8",
+      embedModel: "qwen3-embedding",
+      storeRoot: join(root, "ace-store-ask"),
+    });
+    const model = createHarnessModel({ id: "fake-qwen3.8", baseUrl: askServer.url, profile: QWEN38_RVN_PROFILE });
+    const repo = SqliteSessionRepo.open(join(root, "ace-store-ask"));
+    const harness = await createAceHarness({ cwd, sessionRepo: repo, model, models: createHarnessModels(model, "fake-key"), profile: QWEN38_RVN_PROFILE, ace, permissionProfile: "standard" });
+    try {
+      const allowed = harness.prompt("Make asked.");
+      await until(() => pendingPermissions(cwd).length === 1, 20_000);
+      const ask = pendingPermissions(cwd)[0]!;
+      expect(ask).toMatchObject({ toolName: "bash", args: { command: "mkdir -p asked" } });
+      expect(answerPermission(ask.requestId, "allow")).toBe(true);
+      const first = await allowed;
+      expect(existsSync(join(cwd, "asked"))).toBe(true);
+      expect(first.gates.map((gate) => gate.payload.decision)).toEqual([
+        expect.objectContaining({ allow: false, ask: true, access: "exec-write" }),
+        { allow: true, access: "exec-write" },
+      ]);
+
+      const denied = harness.prompt("Make denied.");
+      await until(() => pendingPermissions(cwd).length === 1, 20_000);
+      expect(answerPermission(pendingPermissions(cwd)[0]!.requestId, "deny")).toBe(true);
+      const second = await denied;
+      expect(existsSync(join(cwd, "denied"))).toBe(false);
+      const settled = second.gates.at(-1)!.payload.decision;
+      expect(settled).toMatchObject({ allow: false, source: "profile", reason: expect.stringContaining("The user denied it.") });
+      expect(settled).not.toHaveProperty("ask");
+    } finally {
+      await harness.close();
+      ace.dispose();
+      repo.close();
+      askServer.stop();
+    }
   }, 30_000);
 });
