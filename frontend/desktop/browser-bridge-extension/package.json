@@ -1,0 +1,16 @@
+{
+  "name": "tuum-browser-bridge-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension (MV3) pairing the user's browser with a Tuum / Local Studio station's Browser Bridge.",
+  "scripts": {
+    "build": "bun build src/background.ts src/popup.ts --outdir dist-chrome --target browser --format esm && cp manifest.json popup.html dist-chrome/",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.1.34",
+    "typescript": "5.9.3"
+  }
+}
