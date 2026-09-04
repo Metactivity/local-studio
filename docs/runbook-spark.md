@@ -62,6 +62,31 @@ be exercised without the basic-auth password, so the check is the config lines
 plus the browser: an `/ide` session that survives a minute idle proves the
 tunnel timeout.
 
+## Browser Bridge (W10)
+
+The runtime relays the owner's Chrome extension (`GET /bridge/ws` WebSocket,
+`POST /bridge/rpc` JSON-RPC, both on 8081). Browsers cannot send basic auth on
+a WebSocket, so `/bridge/ws` is the one path routed past the edge login: the
+bridge's own pairing token authenticates the socket.
+
+- Edge: `acl is_bridge_ws path_beg /bridge/ws` → `backend be_bridge_ws`
+  (`server <station>:8081 check`, `timeout tunnel 1h`, no `http_auth` rule,
+  `http-request set-header Host 127.0.0.1:8081` — the runtime rejects any
+  non-loopback Host, on the upgrade and on every route). Every other path
+  stays behind basic auth.
+- Station: the runtime binds loopback unless
+  `LOCAL_STUDIO_AGENT_RUNTIME_HOST=0.0.0.0` is set in `frontend/.env.local`;
+  the firewall then allows 8081 from the gateway only. The runtime has no auth
+  of its own beyond the Host check, so that firewall rule is the boundary —
+  anything on the gateway host can reach the runtime API by sending a loopback
+  Host; a runtime-side bearer for the non-loopback listener is the follow-up.
+- `LOCAL_STUDIO_BRIDGE_PUBLIC_URL=https://<public hostname>` makes the pairing
+  card show the edge URL.
+- Verify: an anonymous upgrade request to `https://<public hostname>/bridge/ws`
+  (`Connection: Upgrade`, `Upgrade: websocket`, `Sec-WebSocket-Version: 13`,
+  `Sec-WebSocket-Key`) answers `101`; `https://<public hostname>/ide` without
+  credentials still answers `401`.
+
 ## Deploy
 
 ```
