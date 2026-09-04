@@ -96,6 +96,48 @@ describe("IDE bridge server", () => {
     }
   });
 
+  test("two tabs on one folder both stay connected; the most recently active one serves, the other takes over when it closes", async () => {
+    const logs: string[] = [];
+    const bridge = new IdeBridgeServer({ socketPath: join(root, "tabs.sock"), runtimeVersion: "test", log: (m) => logs.push(m) });
+    await bridge.listen();
+    const first = new FakeExtension();
+    const second = new FakeExtension();
+    const editor = (name: string) => rpcNotification("ide.editor.active", { uri: `file://${cwd}/${name}`, languageId: "typescript", selection: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, cursor: { line: 0, character: 0 }, visibleRanges: [] });
+    try {
+      await first.connect(bridge.socketPath);
+      await first.hello(cwd);
+      await second.connect(bridge.socketPath);
+      await second.hello(cwd);
+      first.handlers["ide.readFile"] = () => ({ text: "first", languageId: "typescript", dirty: false });
+      second.handlers["ide.readFile"] = () => ({ text: "second", languageId: "typescript", dirty: false });
+      // The second hello did not evict the first tab; the second is the active one.
+      expect(await bridge.action(cwd, "ide.readFile", { uri: "file:///x" })).toMatchObject({ text: "second" });
+      expect(await bridge.action(cwd, "ide.readFile", { uri: "file:///x" })).toMatchObject({ text: "second" });
+      expect(logs.filter((line) => line.includes("disconnected"))).toEqual([]);
+      // An event on the first tab makes it active again, with its own context; a heartbeat does not.
+      first.send(editor("a.ts"));
+      await until(() => bridge.context(cwd)?.activeEditor?.uri === `file://${cwd}/a.ts`);
+      expect(await bridge.action(cwd, "ide.readFile", { uri: "file:///x" })).toMatchObject({ text: "first" });
+      second.send(rpcNotification("ide.heartbeat", { at: new Date().toISOString() }));
+      first.send(rpcRequest(7, "ace/getStatus", {}));
+      await first.next((f) => "id" in f && f.id === 7);
+      expect(await bridge.action(cwd, "ide.readFile", { uri: "file:///x" })).toMatchObject({ text: "first" });
+      // The active tab closes: the folder falls back to the remaining one, no "disconnected" yet.
+      first.close();
+      await until(() => bridge.context(cwd)?.activeEditor === null);
+      expect(bridge.isConnected(cwd)).toBe(true);
+      expect(await bridge.action(cwd, "ide.readFile", { uri: "file:///x" })).toMatchObject({ text: "second" });
+      expect(logs.filter((line) => line.includes("disconnected"))).toEqual([]);
+      second.close();
+      await until(() => !bridge.isConnected(cwd));
+      expect(logs.filter((line) => line.includes("disconnected"))).toEqual([`disconnected ${cwd}`]);
+    } finally {
+      first.close();
+      second.close();
+      await bridge.close();
+    }
+  });
+
   test("the context block never exceeds its budget", () => {
     let context = emptyContext({ sessionId: "s", extensionVersion: "0" });
     for (let index = 0; index < 400; index += 1) {
