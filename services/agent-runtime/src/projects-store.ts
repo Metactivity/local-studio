@@ -60,7 +60,7 @@ export function removeProjectFromStore(id: string): void {
   store.removeProject(id);
 }
 
-function canonicalDirectory(rawPath: string): string {
+export function canonicalDirectory(rawPath: string): string {
   const resolved = realpathSync.native(rawPath);
   if (!statSync(resolved).isDirectory()) throw new Error(`Path is not a directory: ${rawPath}`);
   return resolved;

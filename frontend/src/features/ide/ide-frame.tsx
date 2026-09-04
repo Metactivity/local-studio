@@ -58,7 +58,9 @@ export function IdeFrame({
   if (!loaded || !folder) {
     return (
       <div className="flex h-full items-center justify-center text-[length:var(--fs-md)] text-(--dim)">
-        {loaded ? "Select a project to open it in the IDE." : "Loading projects..."}
+        {loaded
+          ? "Pick a project in the panel header to open it in the IDE — the chat keeps its session."
+          : "Loading projects..."}
       </div>
     );
   }

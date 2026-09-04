@@ -30,7 +30,7 @@ import {
   uuidv7,
 } from "@local-studio/harness";
 import { NodeExecutionEnv } from "@local-studio/harness/node";
-import { type AceHarness, type AfterToolEvent, type BeforeToolEvent, createAceHarness, createDefaultTools, DEFAULT_SYSTEM_PROMPT } from "./ace/ace-harness";
+import { type AceHarness, type AfterToolEvent, type BeforeToolEvent, createAceHarness, createDefaultTools, createRetrieveContextTool, DEFAULT_SYSTEM_PROMPT, GENERAL_SYSTEM_PROMPT } from "./ace/ace-harness";
 import type { AnyJournalRecord } from "./ace/ace-journal";
 import { aceService, readAceConfig } from "./ace/ace-service";
 import { bootstrapGraphOnce, startGraphMaintenance } from "./ace/ace-graph-bootstrap";
@@ -58,7 +58,9 @@ import { createTurnCheckpoint } from "./ide-bridge/checkpoints";
 import { ideContextBlock } from "./ide-bridge/context";
 import { turnDiagnostics } from "./ide-bridge/diagnostics";
 import { IdeAwareExecutionEnv } from "./ide-bridge/env";
+import { resolveDataDir } from "./data-dir";
 import { ideBridge } from "./ide-bridge/server";
+import { canonicalDirectory } from "./projects-store";
 import { builtinTools, type ToolContext, withAgentPolicy, withTimeoutPolicy } from "./tools";
 import { ideTools } from "./tools/ide";
 import { withTerminalRoute } from "./tools/terminal-route";
@@ -312,29 +314,36 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
     // Same gates, skill directories and env the pi driver hands its extensions.
     const sessionOptions = buildAgentSessionOptionsSync({ options: startOptions, cwd: resolvedCwd });
     const env = { ...process.env, ...sessionOptions.envInjections };
+    // The runtime data dir is the "Chats" scope (MET-934): a general assistant with no project, so no
+    // file tools and no workspace framing; browser, connectors, skills and ACE memory stay.
+    const general = resolvedCwd === canonicalDirectory(resolveDataDir());
     const tools = [
-      // Files open and dirty in the IDE are read and written through the editor (ADR-034 M6, ide-bridge/env.ts);
-      // test / build / run commands go to the IDE terminal while one is connected (M7, tools/terminal-route.ts).
-      ...withTerminalRoute(withTimeoutPolicy(createDefaultTools(resolvedCwd, ace, new IdeAwareExecutionEnv({ cwd: resolvedCwd })), env), {
-        cwd: resolvedCwd,
-        sessionId,
-        env,
-        bridge: ideBridge(),
-      }),
+      ...(general
+        ? ace
+          ? [createRetrieveContextTool(ace, resolvedCwd)]
+          : []
+        : // Files open and dirty in the IDE are read and written through the editor (ADR-034 M6, ide-bridge/env.ts);
+          // test / build / run commands go to the IDE terminal while one is connected (M7, tools/terminal-route.ts).
+          withTerminalRoute(withTimeoutPolicy(createDefaultTools(resolvedCwd, ace, new IdeAwareExecutionEnv({ cwd: resolvedCwd })), env), {
+            cwd: resolvedCwd,
+            sessionId,
+            env,
+            bridge: ideBridge(),
+          })),
       ...(await builtinTools({ cwd: resolvedCwd, sessionId, modelId, env, request: this.#request, gates: sessionOptions.toolGates })),
     ];
     const executionEnv = new NodeExecutionEnv({ cwd: resolvedCwd });
     const { skills } = await loadSkills(executionEnv, sessionOptions.skills);
     const { promptTemplates } = await loadPromptTemplates(executionEnv, sessionOptions.promptTemplatePaths);
     // Same order as pi's system prompt: base, project context files, skills, then the policy; cwd last.
-    const projectContext = formatProjectContext(loadProjectContextFiles(resolvedCwd, resolvePiAgentDir()));
+    const projectContext = general ? "" : formatProjectContext(loadProjectContextFiles(resolvedCwd, resolvePiAgentDir()));
     const systemPrompt = withAgentPolicy(
       [
-        DEFAULT_SYSTEM_PROMPT,
+        general ? GENERAL_SYSTEM_PROMPT : DEFAULT_SYSTEM_PROMPT,
         ...(profile.vision ? [VISION_GUIDANCE] : []),
         ...(projectContext ? [projectContext] : []),
         ...(skills.length > 0 ? [formatSkillsForSystemPrompt(skills)] : []),
-        `Current working directory: ${resolvedCwd.replace(/\\/g, "/")}`,
+        ...(general ? [] : [`Current working directory: ${resolvedCwd.replace(/\\/g, "/")}`]),
       ].join("\n\n"),
     );
 

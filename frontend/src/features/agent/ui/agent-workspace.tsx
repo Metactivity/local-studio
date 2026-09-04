@@ -26,6 +26,7 @@ import { loadAceProposals, loadIdeContext, openInIde } from "@/features/ace/api"
 import { useAceResource } from "@/features/ace/use-ace-resource";
 import { addProjectFromPath, openProjectDirectory } from "@/features/agent/projects/api";
 import { useProjects } from "@/features/agent/projects/context";
+import { CHATS_PROJECT_ID } from "@shared/agent/project-ids";
 import { isChatsProject, type Project } from "@/features/agent/projects/types";
 import { ProjectDirectoryPickerModal } from "@/features/agent/ui/projects-nav/directory-picker-modal";
 import { focusedSession } from "@/features/agent/runtime/selectors";
@@ -161,7 +162,12 @@ export function AgentWorkspace({ layout, ideOrigin }: { layout: AgentMode; ideOr
   const tools = useTools();
   const router = useRouter();
   const { state, dispatch, handles } = useWorkspace({ ephemeral: true });
-  const project = projects.selectedProject;
+  const ide = layout === "ide";
+  // Chat mode needs no folder (MET-934): the "Chats" scope — the runtime data dir, a general
+  // assistant on the runtime side — is the default and stays selectable; a project is optional.
+  const chats = projects.projects.find(isChatsProject) ?? null;
+  const project = projects.selectedProject ?? (ide ? null : chats);
+  const projectless = isChatsProject(project);
   const cwd = project?.path ?? "";
   const focused = focusedSession(state);
   const piSessionId = focused?.piSessionId ?? null;
@@ -188,7 +194,6 @@ export function AgentWorkspace({ layout, ideOrigin }: { layout: AgentMode; ideOr
   // The bridge pill: the extension host of the embedded workbench has said hello for this folder.
   const bridge = useAceResource(cwd ? () => loadIdeContext(cwd) : null, [cwd, tab, piSessionId]);
   const bridged = bridge.data?.connected === true;
-  const ide = layout === "ide";
   const storage = typeof window === "undefined" ? null : window.localStorage;
 
   const switchMode = (mode: AgentMode) => {
@@ -212,8 +217,8 @@ export function AgentWorkspace({ layout, ideOrigin }: { layout: AgentMode; ideOr
     if (nav && handled.current.nav !== nav) {
       handled.current.nav = nav;
       const requested = projects.findById(searchParams.get("project") ?? "") ?? project;
-      // `?project=chats` (a sidebar row) never opens the data dir: the first real folder stands in.
-      const target = isChatsProject(requested) ? (realProjects[0] ?? null) : requested;
+      // `?project=chats` opens the data dir in Chat mode only; the IDE needs a real folder.
+      const target = ide && isChatsProject(requested) ? (realProjects[0] ?? null) : requested;
       if (!target) return;
       handled.current.projectId = target.id;
       if (target !== project) projects.selectProject(target);
@@ -299,7 +304,19 @@ export function AgentWorkspace({ layout, ideOrigin }: { layout: AgentMode; ideOr
   const pickProject = (value: string) => {
     if (value === ADD_FOLDER) return void addFolder();
     const next = projects.findById(value);
-    if (next && next !== project) projects.selectProject(next);
+    if (!next || next === project) return;
+    // A project-less chat keeps its session when a folder is picked: the project is attached to
+    // it (next turn runs with that cwd → project tools + ACE project context) instead of opening
+    // the folder's latest session.
+    if (focused && projectless && !isChatsProject(next)) {
+      handled.current.projectId = next.id;
+      handles.updateSession(focused.id, (session) => ({
+        ...session,
+        projectId: next.id,
+        cwd: next.path,
+      }));
+    }
+    projects.selectProject(next);
   };
 
   const listed = sessions.data ?? [];
@@ -324,13 +341,18 @@ export function AgentWorkspace({ layout, ideOrigin }: { layout: AgentMode; ideOr
     <>
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-(--border)/60 px-2">
         <select
-          value={project && !isChatsProject(project) ? project.id : ""}
+          value={project && (!ide || !projectless) ? project.id : ""}
           aria-label="Project"
           title={project?.path}
           onChange={(event) => pickProject(event.target.value)}
           className="h-6 min-w-0 max-w-[45%] flex-1 rounded-md border border-(--border) bg-transparent px-1.5 text-[length:var(--fs-sm)] text-(--fg)"
         >
-          {realProjects.length === 0 ? <option value="">No project</option> : null}
+          {!ide && chats ? (
+            <option value={CHATS_PROJECT_ID}>General chat (no project)</option>
+          ) : null}
+          {ide && (projectless || realProjects.length === 0) ? (
+            <option value="">{projectless ? "Pick a project…" : "No project"}</option>
+          ) : null}
           {realProjects.map((entry) => (
             <option key={entry.id} value={entry.id}>
               {entry.name}
@@ -407,11 +429,11 @@ export function AgentWorkspace({ layout, ideOrigin }: { layout: AgentMode; ideOr
           tools,
           dispatch,
           handles,
-          compact: true,
+          compact: ide,
         })
       ) : (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-[length:var(--fs-sm)] text-(--dim)">
-          Select a project to chat about it.
+          {projects.loaded ? "Select a project to chat about it." : "Loading projects…"}
         </div>
       )}
       {project && piSessionId ? (
@@ -433,7 +455,7 @@ export function AgentWorkspace({ layout, ideOrigin }: { layout: AgentMode; ideOr
         {ide ? (
           <IdeFrame
             ideOrigin={ideOrigin}
-            folder={cwd}
+            folder={projectless ? "" : cwd}
             loaded={projects.loaded}
             onConnected={() => setConnected(true)}
           />

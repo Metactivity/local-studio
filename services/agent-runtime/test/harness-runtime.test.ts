@@ -173,6 +173,24 @@ describe("HarnessSession", () => {
     }
   }, 30_000);
 
+  test("the data dir is the general assistant: no file tools, no workspace framing (MET-934)", async () => {
+    const server = startFakeLlamaServer([{ text: "Happy to help." }]);
+    const session = driver(server);
+    try {
+      await session.ensureStarted("fake-qwen3.8", join(root, "data"), null, { thinkingLevel: "low", toolAccess: "full" });
+      await session.prompt("What is a sonnet?", () => undefined);
+      const request = server.seen.find((seen) => seen.path === "/v1/chat/completions")!.body!;
+      const advertised = (request.tools as Array<{ function: { name: string } }>).map((tool) => tool.function.name);
+      for (const name of ["read", "grep", "find", "ls", "write", "edit", "bash"]) expect(advertised).not.toContain(name);
+      const system = String((request.messages as Array<{ role: string; content: string }>)[0].content);
+      expect(system).toContain("general-purpose assistant");
+      expect(system).not.toContain("Current working directory");
+    } finally {
+      await session.stop();
+      server.stop();
+    }
+  }, 30_000);
+
   test("steer and follow-up queue while a turn runs and are handed back on abort", async () => {
     const slow: ScriptedReply[] = [{ toolCall: { name: "bash", args: { command: "sleep 5" } } }, { text: "Never reached." }];
     const server = startFakeLlamaServer(slow);
