@@ -5,6 +5,7 @@ import { attachBrowserBridgeWs } from "./browser-bridge/ws";
 import { startAutomationScheduler } from "./automation-scheduler";
 import "./harness";
 import { createAgentRuntimeApp } from "./http/app";
+import { watchWorkspaceChanges } from "./harness-runtime";
 import { ideBridge } from "./ide-bridge/server";
 
 agentCore();
@@ -13,6 +14,7 @@ startAutomationScheduler();
 ideBridge()
   .listen()
   .catch((error: unknown) => console.warn(`[ide-bridge] not listening: ${error instanceof Error ? error.message : String(error)}`));
+watchWorkspaceChanges();
 
 const { app } = createAgentRuntimeApp();
 const port = Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 8081;

@@ -33,6 +33,7 @@ import { NodeExecutionEnv } from "@local-studio/harness/node";
 import { type AceHarness, type AfterToolEvent, type BeforeToolEvent, createAceHarness, createDefaultTools, DEFAULT_SYSTEM_PROMPT } from "./ace/ace-harness";
 import type { AnyJournalRecord } from "./ace/ace-journal";
 import { aceService, readAceConfig } from "./ace/ace-service";
+import { bootstrapGraphOnce, startGraphMaintenance } from "./ace/ace-graph-bootstrap";
 import type { ModelProfile } from "./harness/model-profile";
 import { resolveModelProfile } from "./harness/model-profile";
 import { formatProjectContext, loadProjectContextFiles } from "./harness/context-files";
@@ -176,6 +177,16 @@ export async function resolveHarnessEndpoint(modelId: string): Promise<HarnessEn
 }
 
 let aceStart: { service: NativeService; started: Promise<unknown> } | null = null;
+let workspaceWatch: (() => void) | null = null;
+
+/** The IDE opened another folder (`ide.workspace.changed`): its graph gets the same first-session bootstrap. */
+export function watchWorkspaceChanges(): void {
+  workspaceWatch ??= ideBridge().subscribe((_folder, method, params) => {
+    const folder = (params as { folder?: unknown } | null)?.folder;
+    if (method !== "ide.workspace.changed" || typeof folder !== "string" || !folder) return;
+    void startedAceService().then((ace) => ace && bootstrapGraphOnce(ace, folder));
+  });
+}
 
 /** The process-wide ACE service, started once per instance; null when the environment does not describe one. */
 export async function startedAceService(): Promise<NativeService | null> {
@@ -254,6 +265,8 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   private baseTools: AgentTool[] = [];
   /** The turn that already has its checkpoint (or its "no git" note). */
   private checkpointTurnId: string | null = null;
+  /** Releases this session's hold on the folder's graph maintenance (ace-graph-bootstrap.ts). */
+  private releaseGraph: (() => void) | null = null;
 
   constructor(options: HarnessSessionOptions = {}) {
     super();
@@ -387,6 +400,10 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
 
     const offLoop = harness.events.on("loop", (event) => this.onLoopEvent(event as PiEvent));
     const offJournal = harness.journal.subscribe((record) => {
+      // A gate block or a user denial is a visible timeline notice (MET-933); a pending ask has its own card.
+      if (record.type === "ace.gate" && !record.payload.decision.allow && !record.payload.decision.ask) {
+        this.recordEvent({ type: "notice", level: "warn", message: `${record.payload.toolName}: ${record.payload.decision.reason}` });
+      }
       if (record.type !== "ace.history-compaction") return;
       this.recordEvent({
         type: "compaction_end",
@@ -400,6 +417,12 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
       offLoop();
       offJournal();
     };
+    if (ace) {
+      this.releaseGraph = startGraphMaintenance(ace, resolvedCwd, {
+        onBootstrap: (record) => harness.journal.push("boot", "ace.graph.bootstrap", record),
+        onError: (where, error) => harness.journal.push("boot", "ace.degraded", { where: `graph-${where}`, error: error instanceof Error ? error.message : String(error) }),
+      });
+    }
     this.harness = harness;
     this.baseTools = harness.agent.state.tools;
     this.profile = profile;
@@ -544,6 +567,8 @@ export class HarnessSession extends EventEmitter implements PiAgentSession {
   async stop(): Promise<void> {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.releaseGraph?.();
+    this.releaseGraph = null;
     const harness = this.harness;
     this.harness = null;
     this.queued = { steering: [], followUp: [] };

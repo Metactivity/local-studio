@@ -6,6 +6,7 @@
 
 import path from "node:path";
 import { sessionIdentity } from "../../../../shared/agent/workspace-identity";
+import { graphIndexing } from "../ace/ace-graph-bootstrap";
 import { aceStatus } from "../ace/ace-service";
 import type { AnyJournalRecord } from "../ace/ace-journal";
 import { startedAceService } from "../harness-runtime";
@@ -42,7 +43,9 @@ export async function handleAceStatus(request: Request): Promise<Response> {
   let control: Record<string, unknown> | null = null;
   if (ace && cwd) {
     try {
-      control = await ace.controlSnapshot(resolveAllowedWorkspace(cwd));
+      const folder = resolveAllowedWorkspace(cwd);
+      control = await ace.controlSnapshot(folder);
+      control.graph = { ...(control.graph as Record<string, unknown> | undefined), indexing: graphIndexing(folder) };
     } catch (error) {
       control = { error: errorMessage(error, "control snapshot failed") };
     }

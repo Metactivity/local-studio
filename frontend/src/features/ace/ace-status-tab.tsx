@@ -94,8 +94,8 @@ function StatusCard({ report }: { report: AceStatusReport }) {
         <StatusLine label="Symbols" value={String(graph?.entities ?? 0)} />
         <StatusLine
           label="Indexed"
-          value={relative(graph?.last_indexed_at)}
-          tone={graph?.last_indexed_at ? "ok" : "dim"}
+          value={graph?.indexing ? "indexing…" : relative(graph?.last_indexed_at)}
+          tone={graph?.indexing ? "warn" : graph?.last_indexed_at ? "ok" : "dim"}
         />
       </StatusGroup>
       <StatusGroup title="Store">

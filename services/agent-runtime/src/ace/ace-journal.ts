@@ -22,6 +22,7 @@ export interface JournalPayloads {
   "ace.evaluation": { outcome: string; signals: string[]; rationale: string };
   "ace.reflection": { proposals: number; new: number };
   "ace.degraded": { where: string; error: string };
+  "ace.graph.bootstrap": { cwd: string; indexedFiles: number; pendingFiles: number; ms: number };
 }
 
 export type JournalType = keyof JournalPayloads;

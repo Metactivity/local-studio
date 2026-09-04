@@ -22,7 +22,13 @@ export type AceStatusReport = {
   } | null;
   runtimeSnapshot: { mode: string; chatUrl: string | null; embedUrl: string | null } | null;
   control: {
-    graph?: { indexed_files: number; entities: number; last_indexed_at: string | null };
+    graph?: {
+      indexed_files: number;
+      entities: number;
+      last_indexed_at: string | null;
+      /** A bootstrap rebuild or a refresh pass is running (MET-933). */
+      indexing?: boolean;
+    };
     memory?: { project_bullets: number; global_bullets: number; pending_proposals: number };
     error?: string;
   } | null;

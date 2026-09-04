@@ -1,4 +1,5 @@
 import {
+  appendEventBlock,
   applyAssistantPiEventToBlocks,
   assistantPiEventAffectsBlocks,
   asRecord,
@@ -89,6 +90,17 @@ export function reduceSessionEvent(
 
   if (event.type === "notice" && event.level === "error" && typeof event.message === "string") {
     return { ...session, error: event.message.slice(0, 4_000) };
+  }
+  // A warning (a gate block, a denied ask) is a timeline event line on the current assistant bubble.
+  if (event.type === "notice" && event.level === "warn" && typeof event.message === "string") {
+    const text = event.message.slice(0, 4_000);
+    const target = resolveAssistantTarget(session, ctx);
+    return patchAssistantMessage(
+      target.session,
+      target.targetId,
+      (current) => ({ ...current, blocks: appendEventBlock(current.blocks ?? [], text) }),
+      ctx.replay,
+    );
   }
 
   if (event.type === "queue_update") {
