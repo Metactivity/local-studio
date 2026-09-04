@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [dev, main]
+    branches: [dev, main, spark]
   push:
-    branches: [main]
+    branches: [main, spark]
   schedule:
     - cron: "0 0 * * 0"
 
@@ -34,7 +34,7 @@ jobs:
           if [[ "$GITHUB_HEAD_REF" == "dev" ]]; then
             node scripts/project.mjs check-commits --range "$BASE_SHA..$HEAD_SHA" --exclude origin/dev
           elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            node scripts/project.mjs check-commits --range "$BASE_SHA..$HEAD_SHA" --exclude origin/main
+            node scripts/project.mjs check-commits --range "$BASE_SHA..$HEAD_SHA" --exclude "origin/$GITHUB_BASE_REF"
           else
             node scripts/project.mjs check-commits --range "$BASE_SHA..$HEAD_SHA"
           fi
@@ -97,12 +97,15 @@ jobs:
           bun-version: 1.3.14
       - name: Install repository dependencies
         run: npm run setup
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
       - name: Production quality gate
         working-directory: ./frontend
         run: npm run check:quality
 
+  # No desktop app on the spark line (ADR-034): the station serves the browser build only.
   desktop-package:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && github.base_ref != 'spark' && github.ref_name != 'spark'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
