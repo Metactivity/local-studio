@@ -108,6 +108,7 @@ import {
   handleSessionsList,
 } from "./session-handlers";
 import { handleGenerateSessionTitle } from "./title-handlers";
+import { handleBridgePairStart, handleBridgeRpc, handleBridgeStatus } from "./bridge-handlers";
 import {
   handleCheckpointRevert,
   handleCheckpointShow,
@@ -123,7 +124,7 @@ import {
 // the attacker's hostname in Host — reject those before any route runs.
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-const isLoopbackHost = (header: string | undefined): boolean => {
+export const isLoopbackHost = (header: string | undefined): boolean => {
   if (!header) return false;
   const host = header.trim().toLowerCase();
   const name = host.startsWith("[")
@@ -166,6 +167,10 @@ export function createAgentRuntimeApp() {
   app.get("/api/agent/ace/lens", (c) => handleAceLens(c.req.raw));
   app.post("/api/agent/ace/rebuild-graph", (c) => handleAceRebuildGraph(c.req.raw));
   app.post("/api/agent/ace/restart", () => handleAceRestart());
+  // Browser Bridge (MET-921): the chrome_* tools' relay and the panel's pairing card.
+  app.post("/bridge/rpc", (c) => handleBridgeRpc(c.req.raw));
+  app.get("/api/agent/bridge/status", (c) => handleBridgeStatus(c.req.raw));
+  app.post("/api/agent/bridge/pair/start", (c) => handleBridgePairStart(c.req.raw));
   app.get("/api/agent/ide/context", (c) => handleIdeContext(c.req.raw));
   app.get("/api/agent/ide/terminals", (c) => handleIdeTerminals(c.req.raw));
   app.get("/api/agent/checkpoints", (c) => handleCheckpointsList(c.req.raw));

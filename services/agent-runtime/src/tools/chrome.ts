@@ -5,29 +5,54 @@
 //                         profile, sessions and tabs; everything shows on their
 //                         screen and can touch signed-in accounts.
 //
-// Transport is JSON-RPC to a loopback relay that forwards to the browser
-// extension. The relay is the user's own process: if it is not running, nothing
-// is registered rather than advertising tools that always fail. Env names stay
-// LOCAL_STUDIO_CHROME_RELAY_* until W10 renames them.
+// Transport is JSON-RPC to a relay that forwards to the browser extension. The
+// default relay is the runtime's own Browser Bridge (`POST /bridge/rpc`, W10,
+// src/browser-bridge/), reached in process; `LOCAL_STUDIO_BRIDGE_URL` points at
+// another runtime's bridge, and the legacy `LOCAL_STUDIO_CHROME_RELAY_*` names
+// still select an external Sitegeist-style relay when nothing else is set. A
+// relay with no paired browser answers the probe with an error, so nothing is
+// registered rather than advertising tools that always fail.
 //
 // Ported from pi-extensions/chrome.ts; names, descriptions and schemas unchanged.
 
 import { type Static, type TSchema, Type } from "@earendil-works/pi-ai";
 import { asText, type HarnessTool, readMs, type ToolContext, type ToolResult, withTimeout } from "./context";
 
-type ChromeEnv = { relayUrl: string; relayToken: string; sessionId: string; timeoutMs: number };
+type ChromeEnv = {
+  /** Absolute RPC endpoint, or null for the runtime's own bridge in process. */
+  rpcUrl: string | null;
+  token: string;
+  sessionId: string;
+  timeoutMs: number;
+  request: ToolContext["request"];
+};
 
 // Probing runs at session startup; a relay that accepts the connection and then
 // hangs must not stall every session behind it for the minutes-long tool timeout.
 const PROBE_TIMEOUT_MS = 3_000;
 const HISTORY_LIMIT = 250;
 
-function readEnv(ctx: ToolContext): ChromeEnv {
+const trimUrl = (value: string | undefined): string | undefined => value?.trim().replace(/\/+$/, "");
+
+export function readEnv(ctx: ToolContext): ChromeEnv {
+  const bridgeUrl = trimUrl(ctx.env.LOCAL_STUDIO_BRIDGE_URL);
+  const legacyUrl = trimUrl(ctx.env.LOCAL_STUDIO_CHROME_RELAY_URL);
+  const timeoutMs = readMs(ctx.env, "LOCAL_STUDIO_CHROME_TOOL_TIMEOUT_MS", 120_000);
+  if (legacyUrl && bridgeUrl === undefined) {
+    return {
+      rpcUrl: `${legacyUrl}/rpc`,
+      token: ctx.env.LOCAL_STUDIO_CHROME_RELAY_TOKEN ?? "",
+      sessionId: ctx.env.LOCAL_STUDIO_CHROME_RELAY_SESSION || "default",
+      timeoutMs,
+      request: ctx.request,
+    };
+  }
   return {
-    relayUrl: (ctx.env.LOCAL_STUDIO_CHROME_RELAY_URL || "http://127.0.0.1:7717").replace(/\/+$/, ""),
-    relayToken: ctx.env.LOCAL_STUDIO_CHROME_RELAY_TOKEN ?? "",
-    sessionId: ctx.env.LOCAL_STUDIO_CHROME_RELAY_SESSION || "default",
-    timeoutMs: readMs(ctx.env, "LOCAL_STUDIO_CHROME_TOOL_TIMEOUT_MS", 120_000),
+    rpcUrl: bridgeUrl ? `${bridgeUrl}/bridge/rpc` : null,
+    token: ctx.env.LOCAL_STUDIO_BRIDGE_TOKEN ?? "",
+    sessionId: ctx.env.LOCAL_STUDIO_BRIDGE_SESSION || "default",
+    timeoutMs,
+    request: ctx.request,
   };
 }
 
@@ -39,15 +64,20 @@ async function callRelay(
   timeoutMs = env.timeoutMs,
 ): Promise<unknown> {
   const bounded = withTimeout(signal, timeoutMs);
-  const headers: Record<string, string> = { "Content-Type": "application/json", "X-Sitegeist-Session": env.sessionId };
-  if (env.relayToken) headers.Authorization = `Bearer ${env.relayToken}`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Tuum-Session": env.sessionId,
+    "X-Sitegeist-Session": env.sessionId,
+  };
+  if (env.token) headers.Authorization = `Bearer ${env.token}`;
+  const init: RequestInit = {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
+    signal: bounded.signal,
+  };
   try {
-    const response = await fetch(`${env.relayUrl}/rpc`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
-      signal: bounded.signal,
-    });
+    const response = await (env.rpcUrl ? fetch(env.rpcUrl, init) : env.request("/bridge/rpc", init));
     const body = (await response.json().catch(() => ({}))) as { result?: unknown; error?: { message?: string } };
     if (!response.ok || body.error) throw new Error(body.error?.message || `chrome relay HTTP ${response.status}`);
     return body.result;
