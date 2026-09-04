@@ -17,6 +17,7 @@ import { SqliteSessionRepo } from "../src/ace/sqlite-session-repo";
 import { QWEN38_RVN_PROFILE } from "../src/harness/model-profile";
 import { createHarnessModel, createHarnessModels } from "../src/harness/spark-model";
 import { resetHarnessSessions } from "../src/harness-sessions";
+import { handleIdeTerminals } from "../src/http/ide-handlers";
 import { turnDiagnostics } from "../src/ide-bridge/diagnostics";
 import { IdeBridgeServer, resetIdeBridge } from "../src/ide-bridge/server";
 import { resetTerminalRuns, terminalCaptureAvailable, terminalRuns } from "../src/ide-bridge/terminals";
@@ -105,6 +106,9 @@ describe("terminal tool against the fake extension", () => {
       expect(seen[0]).toMatchObject({ cmd: "bun test", cwd, name: "tests", captureOutput: true, timeoutMs: 120_000 });
       expect(terminalRuns(cwd, "s7")).toMatchObject([{ termId: "t1", name: "tests", command: "bun test", exitCode: 0, captured: true, tail: "$ bun test\n1 pass\n" }]);
       expect(terminalRuns(cwd, "other")).toEqual([]);
+      // The panel polls this route every few seconds: a session without runs is an empty 200, not a 404.
+      const empty = handleIdeTerminals(new Request(`http://runtime/api/agent/ide/terminals?${new URLSearchParams({ cwd, sessionId: "other" })}`));
+      expect([empty.status, await empty.json()]).toEqual([200, { runs: [] }]);
 
       script = { exitCode: 1, captured: true };
       await expect(terminal.execute("t", { command: "bun test" })).rejects.toThrow(/1 pass\n\nCommand exited with code 1$/);
