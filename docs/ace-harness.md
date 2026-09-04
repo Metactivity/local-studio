@@ -125,7 +125,7 @@ values arrive on `ToolContext.env` (the same `runtimeEnvInjections` pi exported 
 | `automations` | `list_automations` `read_automation` `schedule_automation` `update_automation` `set_automation_status` `run_automation_now` `delete_automation`                                                                                                      | always                                                                                                   | `/api/agent/automations…` in process; `LOCAL_STUDIO_CWD`, session model id for defaults                                                                         |
 | `subagents`   | `subagent` `subagent_list` `subagent_status` `subagent_stop`                                                                                                                                                                                         | always                                                                                                   | `/api/agent/subagents…` in process, scoped to the harness session id; a child is a second `HarnessSession` under `subagent:<parent>:<run>` (`src/subagents.ts`) |
 | `cua`         | `browser_navigate` `browser_get_url` `browser_get_text` `browser_get_html` `browser_screenshot` `browser_click` `browser_fill` `browser_scroll` `browser_back` `browser_forward` `browser_reload` `browser_history`                                  | Browser tool on                                                                                          | `/api/agent/browser/:verb` in process; `LOCAL_STUDIO_BROWSER_SESSION_ID`, `LOCAL_STUDIO_BROWSER_TOOL_TIMEOUT_MS`                                                |
-| `chrome`      | `chrome_navigate` `chrome_get_url` `chrome_get_text` `chrome_get_html` `chrome_screenshot` `chrome_click` `chrome_fill` `chrome_scroll` `chrome_eval` `chrome_tabs_list` `chrome_tabs_new` `chrome_tabs_switch` `chrome_tabs_close` `chrome_history` | Browser on + backend `chrome` + relay answers a 3 s `relay.capabilities` probe (only advertised methods) | JSON-RPC to the relay; `LOCAL_STUDIO_CHROME_RELAY_URL` / `_TOKEN` / `_SESSION`, `LOCAL_STUDIO_CHROME_TOOL_TIMEOUT_MS` (W10 renames)                             |
+| `chrome`      | `chrome_navigate` `chrome_get_url` `chrome_get_text` `chrome_get_html` `chrome_screenshot` `chrome_click` `chrome_fill` `chrome_scroll` `chrome_eval` `chrome_tabs_list` `chrome_tabs_new` `chrome_tabs_switch` `chrome_tabs_close` `chrome_history` | Browser on + backend `chrome` + a paired browser answers the 3 s `relay.capabilities` probe (only advertised methods) | JSON-RPC to the Browser Bridge (below); `LOCAL_STUDIO_BRIDGE_URL` / `_TOKEN` / `_SESSION`, legacy `LOCAL_STUDIO_CHROME_RELAY_*`, `LOCAL_STUDIO_CHROME_TOOL_TIMEOUT_MS` |
 | `github`      | `github_status` `github_search` `github_issue_list` `github_issue_view` `github_pr_list` `github_pr_view` `github_pr_diff` `github_pr_checks` `github_run_list` `github_run_view` `github_api` `github_cli`                                          | `gh` binary found                                                                                        | `execFile` argv, no shell; `LOCAL_STUDIO_GH_PATH`, `LOCAL_STUDIO_CWD`                                                                                           |
 | `obsidian`    | `obsidian_vaults` `obsidian_search` `obsidian_read` `obsidian_recent` `obsidian_backlinks` `obsidian_create` `obsidian_append`                                                                                                                       | Obsidian registered a vault                                                                              | filesystem; `LOCAL_STUDIO_OBSIDIAN_VAULTS` (fallback `LOCAL_STUDIO_OBSIDIAN_CONFIG` / obsidian.json)                                                            |
 | `connectors`  | `<connector_id>_<tool>` per granted MCP tool                                                                                                                                                                                                         | ≥ 1 connector enabled                                                                                    | `/api/agent/connectors/call` in process, `model_id` = session model                                                                                             |
@@ -163,6 +163,33 @@ those shapes, so the driver forwards them as is and synthesizes the ones the pi-
 
 Replay (`GET /api/agent/sessions/:id`) is the same vocabulary pi writes: `session` header, `message` entries,
 `compaction` entries (`summary`), `model_change`.
+
+## Browser Bridge (W10, MET-921)
+
+The backend of the `chrome_*` tools: a relay inside the runtime (`src/browser-bridge/`) and the **Tuum Browser
+Bridge** Chrome extension (`frontend/desktop/browser-bridge-extension/`, MV3, unpacked; its README has the load and
+pairing steps). The extension dials the runtime **outbound**; nothing listens in the browser.
+
+| Surface                                | Role                                                                                                                                                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /bridge/rpc`                     | JSON-RPC 2.0 from the tools: `relay.capabilities` + the 13 `browser.*` methods (fixed allow-list, anything else → `-32601`); session from `X-Tuum-Session` (or the legacy `X-Sitegeist-Session`), default `default`; `Authorization: Bearer` required only when `LOCAL_STUDIO_BRIDGE_TOKEN` is set |
+| `GET /bridge/ws`                       | The extension's WebSocket (upgrade taken on the node server, same loopback-Host rule as the app). First frame `{type:"pair", code}` or `{type:"auth", token}`, then JSON-RPC requests relay → browser, `{type:"state", readOnly}` / `{type:"ping"}` browser → relay |
+| `POST /api/agent/bridge/pair/start`    | One-time 6-digit code (5 min, one outstanding per session) shown by the panel's ACE tab card; redeemed once, it mints a bearer token persisted in `<data dir>/browser-bridge.json` (0600) |
+| `GET /api/agent/bridge/status`         | `{paired, connected, readOnly, pairing, stationUrl}`; the card polls it every 3 s                                                                        |
+
+Errors are decided fast, never by hanging: no browser connected for the session → `-32001 browser not paired` (the
+probe then registers no `chrome_*` tool for the next session); the browser did not answer within
+`LOCAL_STUDIO_CHROME_TOOL_TIMEOUT_MS` (120 s) → `-32000`; the extension's approval switch off → `-32002 read-only mode`
+for `browser.eval` / `click` / `fill` (the switch lives in the extension, the relay only reports it). The relay logs no
+frame: page text and screenshots pass through and are never stored. Tokens travel in the first WebSocket frame, never in
+a URL; the extension keeps its token in `chrome.storage.local` only.
+
+Tool-side env: `LOCAL_STUDIO_BRIDGE_URL` (unset or empty = this runtime's own relay, in process; a base URL = that
+runtime's `/bridge/rpc`), `LOCAL_STUDIO_BRIDGE_TOKEN`, `LOCAL_STUDIO_BRIDGE_SESSION` (default `default`). The legacy
+`LOCAL_STUDIO_CHROME_RELAY_URL` / `_TOKEN` / `_SESSION` (Sitegeist `~/.config/sitegeist-relay/env`) still select an
+external relay when set and no bridge URL is. `LOCAL_STUDIO_BRIDGE_PUBLIC_URL` overrides the station URL the card shows
+(default `http://127.0.0.1:<PORT>`); the runtime binds loopback, so a browser on another machine reaches it through a
+tunnel (`ssh -L 18081:127.0.0.1:8081`) until the edge forwards `/bridge/ws`.
 
 ## Workspace identity
 
