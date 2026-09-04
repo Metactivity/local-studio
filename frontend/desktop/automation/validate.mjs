@@ -595,6 +595,7 @@ export function auditLayout() {
     "scripts/dev-watch.sh",
     "scripts/install-controller.sh",
     "scripts/install-desktop-app.sh",
+    "scripts/sync-tuum-assets.sh",
   ];
   const actual = readdirSync(path.join(repoRoot, "scripts"), { withFileTypes: true })
     .filter((entry) => entry.isFile())

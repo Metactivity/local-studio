@@ -1,4 +1,7 @@
 export type ThemeId =
+  | "tuum-dark"
+  | "tuum-light"
+  | "tuum-hc"
   | "zai-light"
   | "zai-dark"
   | "chatgpt-dark"
@@ -58,6 +61,11 @@ export interface ThemeUiTokens {
 }
 
 const THEME_FONT_FAMILY_BY_ID: Partial<Record<ThemeId, FontFamilyId>> = {
+  // The kit specifies Inter; the app ships no font files, so the system stack
+  // (Inter-class on every desktop) is the closest bundled equivalent.
+  "tuum-dark": "system",
+  "tuum-light": "system",
+  "tuum-hc": "system",
   "chatgpt-dark": "openai",
   "absolutely-dark": "system",
   "raycast-dark": "system",
@@ -192,7 +200,119 @@ const lightTheme = (bg: string, fg: string, surface: string, accent: string): Th
   err: "#e02e2a",
 });
 
+// Tuum Production Design Kit semantics (Figma AahVHwpjlIx6UpHyklf8Gw, page 01B)
+// mapped onto the surface quartet: canvas / raised / border / text / accent.
+// `ui` pins the kit's selected + hover surfaces instead of the derived overlays.
+const TUUM_DARK: ThemeTokens = {
+  bg: "#0d1117",
+  fg: "#f6f7f8",
+  dim: "#a1a7ae",
+  border: "#2a323b",
+  surface: "#171c22",
+  accent: "#1da7b8",
+  hl1: "#a1a7ae",
+  hl2: "#a1a7ae99",
+  hl3: "#5f6872",
+  err: "#e5534b",
+};
+
+const TUUM_DARK_UI: Partial<ThemeUiTokens> = {
+  "surface-2": "#ffffff14",
+  "surface-3": "#ffffff0a",
+  rail: "#171c22",
+  border: "#2a323b",
+  separator: "#2a323b80",
+  hover: "#ffffff0f",
+  active: "#0e2b30",
+  composer: "#171c22",
+  "composer-footer": "#171c22",
+  bubble: "#171c22",
+};
+
+const TUUM_LIGHT: ThemeTokens = {
+  bg: "#f6f7f8",
+  fg: "#0d1117",
+  dim: "#5f6872",
+  border: "#d7dce1",
+  surface: "#ffffff",
+  accent: "#087c8a",
+  hl1: "#5f6872",
+  hl2: "#5f687299",
+  hl3: "#8a929b",
+  err: "#c93d36",
+};
+
+const TUUM_LIGHT_UI: Partial<ThemeUiTokens> = {
+  "surface-2": "#0d111714",
+  "surface-3": "#0d11170a",
+  rail: "#ffffff",
+  border: "#d7dce1",
+  separator: "#d7dce180",
+  hover: "#0d11170d",
+  active: "#dff0f2",
+  composer: "#ffffff",
+  "composer-footer": "#ffffff",
+  bubble: "#ffffff",
+};
+
+// High contrast: pure black canvas, opaque borders, no translucent overlays.
+const TUUM_HC: ThemeTokens = {
+  bg: "#000000",
+  fg: "#ffffff",
+  dim: "#d0d4d8",
+  border: "#a1a7ae",
+  surface: "#0d1117",
+  accent: "#1da7b8",
+  hl1: "#d0d4d8",
+  hl2: "#a1a7ae",
+  hl3: "#a1a7ae",
+  err: "#ff6b63",
+};
+
+const TUUM_HC_UI: Partial<ThemeUiTokens> = {
+  "surface-2": "#171c22",
+  "surface-3": "#0d1117",
+  rail: "#0d1117",
+  border: "#a1a7ae",
+  separator: "#5f6872",
+  hover: "#1e242b",
+  active: "#0e2b30",
+  composer: "#0d1117",
+  "composer-footer": "#0d1117",
+  bubble: "#0d1117",
+};
+
 export const THEMES: ThemeMeta[] = [
+  {
+    ...createTheme(
+      "tuum-dark",
+      "Tuum Dark",
+      "Graphite canvas, raised panels, Mineral Teal accent",
+      "Tuum",
+      TUUM_DARK,
+    ),
+    ui: TUUM_DARK_UI,
+  },
+  {
+    ...createTheme(
+      "tuum-light",
+      "Tuum Light",
+      "Off-white canvas, white panels, deep teal accent",
+      "Tuum",
+      TUUM_LIGHT,
+    ),
+    ui: TUUM_LIGHT_UI,
+  },
+  {
+    ...createTheme(
+      "tuum-hc",
+      "Tuum High Contrast",
+      "Black canvas, opaque borders, Mineral Teal accent",
+      "Tuum",
+      TUUM_HC,
+    ),
+    ui: TUUM_HC_UI,
+  },
   createTheme(
     "zai-dark",
     "Studio Dark",
@@ -258,18 +378,24 @@ export const THEMES: ThemeMeta[] = [
     // (docs/research/cursor/01-cursor-design-tokens.md): #141414 chrome,
     // #181818 canvas, #F0F0F0 text with 74/36 % opacity tiers, steel-blue
     // accent, and its hairline #F0F0F013 borders.
-    ...createTheme("cursor-dark", "Cursor Dark", "Cursor's Glass palette — graphite chrome and a steel-blue accent", "Ported", {
-      bg: "#181818",
-      fg: "#F0F0F0",
-      dim: "#F0F0F099",
-      border: "#F0F0F013",
-      surface: "#1f1f1f",
-      accent: "#599CE7",
-      hl1: "#F0F0F0bd",
-      hl2: "#F0F0F05c",
-      hl3: "#8f8f8f",
-      err: "#E34671",
-    }),
+    ...createTheme(
+      "cursor-dark",
+      "Cursor Dark",
+      "Cursor's Glass palette — graphite chrome and a steel-blue accent",
+      "Ported",
+      {
+        bg: "#181818",
+        fg: "#F0F0F0",
+        dim: "#F0F0F099",
+        border: "#F0F0F013",
+        surface: "#1f1f1f",
+        accent: "#599CE7",
+        hl1: "#F0F0F0bd",
+        hl2: "#F0F0F05c",
+        hl3: "#8f8f8f",
+        err: "#E34671",
+      },
+    ),
     ui: {
       "surface-2": "#1f1f1f",
       "surface-3": "#262626",

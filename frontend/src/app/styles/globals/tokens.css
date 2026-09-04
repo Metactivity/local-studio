@@ -371,6 +371,7 @@
 /* Light theme ids — flipping `color-scheme` selects the light arm of every
    light-dark() pair above. A theme id missing from this list silently gets
    the dark arms, so any future light theme MUST be added here. */
+:root[data-theme="tuum-light"],
 :root[data-theme="zai-light"],
 :root[data-theme="nordic-light"],
 :root[data-theme="paper"] {
@@ -378,6 +379,7 @@
 }
 
 .dark,
+:root[data-theme="tuum-dark"],
 :root[data-theme="zai-dark"] {
   color-scheme: dark;
 }
@@ -422,6 +424,62 @@
   --warn: var(--color-warning);
   /* Blue — links, file/URL chips, focus, live status */
   --link: light-dark(var(--blue-400), var(--blue-300));
+  /* Kit status hues the Tuum ids override below. On `:root` so every other
+     theme id resolves them too (see the header comment). */
+  --running: var(--link);
+  --focus-ring: var(--accent);
+  /* Mineral Teal — the brand mark only, never a theme accent. */
+  --brand-teal: #1da7b8;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Tuum — Production Design Kit semantics (Figma AahVHwpjlIx6UpHyklf8Gw, 01B).
+   Surfaces come inlined by the theme runtime from themes-data.ts; these blocks
+   carry only what the runtime does not emit: the accent-as-link, status hues,
+   focus ring, popovers and inputs on raised surfaces. `--radius-base` stays
+   10 px: the ramp's --rad-md (8 px) already matches the kit card radius on
+   the instrument-panel tables, and 7 px on controls read cramped.
+   ────────────────────────────────────────────────────────────────────────── */
+:root[data-theme="tuum-dark"],
+:root[data-theme="tuum-hc"] {
+  --link: #1da7b8;
+  --running: #4da3e8;
+  --focus-ring: #1da7b8;
+  --color-success: #27b05b;
+  --color-warning: #d9a03f;
+  --color-destructive: #e5534b;
+  --color-popover: #171c22;
+  --color-popover-border: #2a323b;
+  --color-menu: #171c22;
+  --color-input: #ffffff0a;
+  --color-input-border: #2a323b;
+  --color-tooltip: #1e242b;
+  --color-toast: #171c22;
+  --color-terminal-bg: #0d1117;
+}
+
+:root[data-theme="tuum-hc"] {
+  --color-input: #0d1117;
+  --color-input-border: #a1a7ae;
+  --color-popover-border: #a1a7ae;
+  --color-success: #3ccf6e;
+  --color-warning: #ffc04d;
+}
+
+:root[data-theme="tuum-light"] {
+  --link: #087c8a;
+  --running: #2f7fc4;
+  --focus-ring: #087c8a;
+  --color-success: #167a3a;
+  --color-warning: #8a5a00;
+  --color-destructive: #c93d36;
+  --color-popover: #ffffff;
+  --color-popover-border: #d7dce1;
+  --color-menu: #ffffff;
+  --color-input: #ffffff;
+  --color-input-border: #d7dce1;
+  --color-tooltip: #0d1117;
+  --color-toast: #ffffff;
 }
 
 @media (min-width: 1024px) {
@@ -528,7 +586,7 @@
      ring every control shares, and the text colour that sits on a danger
      button. The rest of that block aliased tokens nothing ever read. */
   --destructive-foreground: var(--color-destructive-foreground);
-  --ring: color-mix(in srgb, var(--link) 70%, transparent);
+  --ring: color-mix(in srgb, var(--focus-ring) 70%, transparent);
 }
 
 @supports (height: 100dvh) {

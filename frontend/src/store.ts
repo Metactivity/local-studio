@@ -82,7 +82,7 @@ export interface ThemeSlice {
 }
 
 const createThemeSlice: StateCreator<ThemeSlice, [], [], ThemeSlice> = (set) => ({
-  themeId: "zai-dark",
+  themeId: "tuum-dark",
   fontFamilyId: DEFAULT_FONT_FAMILY_ID,
   fontSizeId: DEFAULT_FONT_SIZE_ID,
   setThemeId: (themeId: ThemeId) => {

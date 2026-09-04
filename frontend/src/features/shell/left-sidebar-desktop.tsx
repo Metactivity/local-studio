@@ -12,6 +12,7 @@ import {
   Settings,
 } from "@/ui/icon-registry";
 import type { NavView, ProjectsNavSectionComponent } from "@/features/shell/left-sidebar-lazy";
+import { TuumSymbol, TuumWordmark } from "@/ui/tuum-icon";
 import {
   NavDestinationsStrip,
   NavIconButton,
@@ -88,6 +89,7 @@ export function DesktopSidebar({
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <BrandLockup />
           <div className="flex h-[var(--h-toolbar)] shrink-0 items-center gap-0.5 bg-(--sidebar-bg) px-1.5">
             <button
               onClick={() => onSetPinnedOpen(false)}
@@ -165,6 +167,15 @@ function CollapsedRail({
 }) {
   return (
     <div className="flex h-full flex-col items-center gap-0.5 py-1">
+      <Link
+        href="/ide"
+        prefetch={false}
+        title="Tuum"
+        aria-label="Tuum — IDE"
+        className="flex h-8 w-7 items-center justify-center rounded-md"
+      >
+        <TuumSymbol size={20} />
+      </Link>
       <NavIconButton label="Expand sidebar" onClick={onExpand}>
         <PanelLeftHollow className="h-3.5 w-3.5" strokeWidth={1.6} />
       </NavIconButton>
@@ -214,5 +225,20 @@ function CollapsedRail({
         <Settings className="h-3.5 w-3.5" strokeWidth={1.6} />
       </Link>
     </div>
+  );
+}
+
+/** Symbol + wordmark lockup (kit horizontal lockup at 16 px symbol height). */
+function BrandLockup() {
+  return (
+    <Link
+      href="/ide"
+      prefetch={false}
+      aria-label="Tuum — IDE"
+      className="flex h-9 shrink-0 items-center gap-2 px-3 pt-1 text-(--fg) hover:text-(--accent)"
+    >
+      <TuumSymbol size={16} />
+      <TuumWordmark className="h-3 w-[26px]" />
+    </Link>
   );
 }

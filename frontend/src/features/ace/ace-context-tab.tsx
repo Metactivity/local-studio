@@ -10,6 +10,8 @@ import {
 } from "@/features/ace/api";
 import { useAceResource } from "@/features/ace/use-ace-resource";
 import { AcePanelNotice } from "@/features/ace/ace-panel-notice";
+import { TUUM } from "@/lib/tuum-identity";
+import { TuumEmptyState } from "@/ui/tuum";
 
 type LensItem = { kind: string; source: string; raison?: string };
 type Lens = {
@@ -210,10 +212,13 @@ export function AceContextTab({
   sessionId,
   piSessionId,
   cwd,
+  finished,
 }: {
   sessionId: string | null;
   piSessionId: string | null;
   cwd: string;
+  /** The session ran and settled: its harness (and journal) is gone. */
+  finished: boolean;
 }) {
   const lens = useAceResource(sessionId ? () => loadAceLens(sessionId, piSessionId) : null, [
     sessionId,
@@ -227,12 +232,20 @@ export function AceContextTab({
         {ide.error ? <AcePanelNotice tone="error">{ide.error}</AcePanelNotice> : null}
       </StatusGroup>
       {lens.error ? <AcePanelNotice tone="error">{lens.error}</AcePanelNotice> : null}
-      {lens.data ? (
+      {lens.data?.length ? (
         <TurnLens records={lens.data} />
       ) : lens.loading ? (
         <AcePanelNotice>Loading the Context Lens…</AcePanelNotice>
+      ) : finished ? (
+        <TuumEmptyState illustration="session-complete" title={TUUM.copy.sessionComplete}>
+          The lens shows the last turn while a session runs. Send a prompt to start a new one.
+        </TuumEmptyState>
       ) : (
-        <AcePanelNotice>Open a session to see what ACE injected.</AcePanelNotice>
+        <TuumEmptyState illustration="no-context" title={TUUM.copy.noContext}>
+          {sessionId
+            ? "The lens fills after the first prompt."
+            : "Open a session to see what ACE injected."}
+        </TuumEmptyState>
       )}
       <div className="mt-4">
         <Button

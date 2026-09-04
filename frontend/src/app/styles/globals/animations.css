@@ -132,3 +132,19 @@
 .animate-cursor-blink {
   animation: blink 0.7s ease-in-out infinite;
 }
+
+/* Tuum thinking indicator — one linear arc, 1200 ms (design kit motion).
+   Under reduced motion the arc stands still and the "Thinking…" text shows. */
+@keyframes tuum-arc {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.tuum-arc {
+  animation: tuum-arc 1200ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tuum-arc {
+    animation: none;
+  }
+}
