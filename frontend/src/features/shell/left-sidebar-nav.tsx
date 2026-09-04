@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type ComponentType, type MouseEvent, type ReactNode } from "react";
-import { Activity, Plus } from "@/ui/icon-registry";
+import { Activity, Gauge, Plus } from "@/ui/icon-registry";
 import { TUUM } from "@/lib/tuum-identity";
 import { tuumIcon } from "@/ui/tuum-icon";
 
@@ -10,10 +10,12 @@ export type IconComponent = ComponentType<{ className?: string; strokeWidth?: nu
 
 // Kit product icons where one maps; Lucide (Activity, Settings) otherwise.
 export const tabs = [
+  { href: "/chat", label: "Chat", icon: tuumIcon("agent-session") },
   { href: "/ide", label: "IDE", icon: tuumIcon("worktree") },
-  { href: "/", label: "Status", icon: Activity },
-  { href: "/models", label: "Models", icon: tuumIcon("local-runtime") },
   { href: "/agent/automations", label: "Automations", icon: tuumIcon("orchestration") },
+  { href: "/models", label: "Models", icon: tuumIcon("local-runtime") },
+  { href: "/", label: "Status", icon: Activity },
+  { href: "/usage", label: "Usage", icon: Gauge },
 ];
 
 export function mobilePageTitle(pathname: string): string {
@@ -51,7 +53,7 @@ export function NavNewTaskMobile({
 }) {
   return (
     <Link
-      href="/ide?new=1&replace=1"
+      href="/chat?new=1&replace=1"
       prefetch={false}
       onClick={onClick}
       className="mb-2 flex h-11 items-center gap-3 rounded-lg border border-(--border)/70 bg-(--surface-2)/25 px-3 text-[15px] text-(--fg)/90 transition-colors active:bg-(--hover)"

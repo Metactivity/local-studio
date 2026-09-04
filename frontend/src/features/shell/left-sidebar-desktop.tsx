@@ -168,10 +168,10 @@ function CollapsedRail({
   return (
     <div className="flex h-full flex-col items-center gap-0.5 py-1">
       <Link
-        href="/ide"
+        href="/chat"
         prefetch={false}
         title="Tuum"
-        aria-label="Tuum — IDE"
+        aria-label="Tuum — Chat"
         className="flex h-8 w-7 items-center justify-center rounded-md"
       >
         <TuumSymbol size={20} />
@@ -232,9 +232,9 @@ function CollapsedRail({
 function BrandLockup() {
   return (
     <Link
-      href="/ide"
+      href="/chat"
       prefetch={false}
-      aria-label="Tuum — IDE"
+      aria-label="Tuum — Chat"
       className="flex h-9 shrink-0 items-center gap-2 px-3 pt-1 text-(--fg) hover:text-(--accent)"
     >
       <TuumSymbol size={16} />

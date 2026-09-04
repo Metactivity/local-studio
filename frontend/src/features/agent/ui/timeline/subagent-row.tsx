@@ -14,6 +14,7 @@
 // starts. So the row reads the block for ids, falls back to matching the live
 // poll by name, and prefers whichever it has.
 
+import { agentWorkspaceHref } from "@shared/agent/agent-mode";
 import { createContext, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { Spinner } from "@/ui";
@@ -80,9 +81,7 @@ export function SubagentRow({ block }: { block: ToolBlock }) {
       onClick={() => {
         const project = projects.findByPath(cwd) ?? projects.selectedProject;
         if (!childPiSessionId || !project) return;
-        router.push(
-          `/ide?project=${encodeURIComponent(project.id)}&session=${encodeURIComponent(childPiSessionId)}&replace=1`,
-        );
+        router.push(agentWorkspaceHref(project.id, { session: childPiSessionId }));
       }}
       title={
         failure

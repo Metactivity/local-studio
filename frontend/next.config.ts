@@ -105,10 +105,10 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname, ".."),
   },
-  // The legacy /agent workbench is gone (ADR-034 M8): the IDE page hosts the
-  // agent panel. Query params (project, session, new) carry over.
+  // The legacy /agent workbench is gone (ADR-034 M8); /chat is the classic
+  // full-width workspace (MET-934). Query params (project, session, new) carry over.
   async redirects() {
-    return [{ source: "/agent", destination: "/ide", permanent: false }];
+    return [{ source: "/agent", destination: "/chat", permanent: false }];
   },
   async rewrites() {
     return [

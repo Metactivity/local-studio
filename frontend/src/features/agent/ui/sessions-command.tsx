@@ -1,5 +1,6 @@
 "use client";
 
+import { agentWorkspaceHref } from "@shared/agent/agent-mode";
 import { Fragment, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "@/ui/icon-registry";
@@ -59,10 +60,16 @@ const APP_DESTINATIONS: AppDestination[] = [
     description: "Scheduled and event-driven agent runs.",
   },
   {
+    href: "/chat",
+    label: "Chat",
+    keywords: "chat agent projects sessions browser workspace",
+    description: "The project-aware agent workspace.",
+  },
+  {
     href: "/ide",
     label: "IDE",
     keywords: "ide editor agent chat projects browser workbench",
-    description: "The editor with the project-aware agent panel.",
+    description: "The editor with the agent panel beside it.",
   },
   {
     href: "/settings",
@@ -78,10 +85,8 @@ type PaletteRow = { key: string; section: string; href: string } & (
   | { kind: "recent"; session: AggregatedSession }
 );
 
-function agentSessionHref(projectId: string, sessionId: string | null): string {
-  const sessionParam = sessionId ? `&session=${encodeURIComponent(sessionId)}` : "";
-  return `/ide?project=${encodeURIComponent(projectId)}${sessionParam}&replace=1`;
-}
+const agentSessionHref = (projectId: string, sessionId: string | null) =>
+  agentWorkspaceHref(projectId, sessionId ? { session: sessionId } : null);
 
 function isRunning(status: string): boolean {
   return Boolean(status) && status !== "idle" && status !== "done";

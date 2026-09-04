@@ -1,5 +1,6 @@
 "use client";
 
+import { agentWorkspaceHref } from "@shared/agent/agent-mode";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState, type DragEvent } from "react";
 import { safeJson } from "@/features/agent/safe-json";
@@ -367,9 +368,11 @@ export function ActiveSessionRow({
       label={label}
       initialDraft={cleanSessionTitle(pref.title) || cleanSessionTitle(session.title)}
       rowClass={rowClass}
-      href={`/ide?project=${encodeURIComponent(project.id)}${
-        session.threadId ? `&session=${encodeURIComponent(session.threadId)}&replace=1` : ""
-      }`}
+      href={
+        session.threadId
+          ? agentWorkspaceHref(project.id, { session: session.threadId })
+          : `/chat?project=${encodeURIComponent(project.id)}`
+      }
       onOpen={() => {
         if (session.paneId && !session.threadId) {
           workspaceCommands().focusSession(session.paneId, session.id, {
@@ -462,7 +465,7 @@ export function SessionRow({
       timestamp={session.updatedAt || session.startedAt}
       rowClass={`group relative flex h-[var(--sidebar-row-height)] items-center rounded-[var(--sidebar-row-radius)] pl-2 pr-0 transition-[color,background-color,opacity] hover:bg-(--hover) ${dragging ? "opacity-45" : ""}`}
       renameRowClass="flex h-[var(--sidebar-row-height)] items-center rounded-[var(--sidebar-row-radius)] bg-(--surface)/40 pl-2 pr-1"
-      href={`/ide?project=${encodeURIComponent(project.id)}&session=${encodeURIComponent(session.id)}&replace=1`}
+      href={agentWorkspaceHref(project.id, { session: session.id })}
       onPatchPref={(patch) => patchSessionPref(session.id, patch)}
       onArchive={() => {
         void setSessionArchive(session.id, project, label, true)
@@ -507,9 +510,7 @@ export function NewChatPlusButton({
   const router = useRouter();
   const openNewChat = () => {
     onNavigateStart?.();
-    const href = hrefWithOpenNonce(
-      `/ide?project=${encodeURIComponent(project.id)}&new=1&replace=1`,
-    );
+    const href = hrefWithOpenNonce(agentWorkspaceHref(project.id, { new: true }));
     router.push(href);
   };
 
