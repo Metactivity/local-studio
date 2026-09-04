@@ -213,12 +213,15 @@ export function AceContextTab({
   piSessionId,
   cwd,
   finished,
+  onOpenIde,
 }: {
   sessionId: string | null;
   piSessionId: string | null;
   cwd: string;
   /** The session ran and settled: its harness (and journal) is gone. */
   finished: boolean;
+  /** Chat mode: no workbench on this page — the button switches to IDE mode. */
+  onOpenIde: (() => void) | null;
 }) {
   const lens = useAceResource(sessionId ? () => loadAceLens(sessionId, piSessionId) : null, [
     sessionId,
@@ -228,7 +231,16 @@ export function AceContextTab({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-4">
       <StatusGroup title="IDE">
-        {ide.data ? <IdeChips report={ide.data} /> : null}
+        {onOpenIde && !ide.data?.connected ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <AcePanelNotice>IDE not open — switch to IDE mode.</AcePanelNotice>
+            <Button size="sm" variant="ghost" onClick={onOpenIde}>
+              Open IDE
+            </Button>
+          </div>
+        ) : ide.data ? (
+          <IdeChips report={ide.data} />
+        ) : null}
         {ide.error ? <AcePanelNotice tone="error">{ide.error}</AcePanelNotice> : null}
       </StatusGroup>
       {lens.error ? <AcePanelNotice tone="error">{lens.error}</AcePanelNotice> : null}
