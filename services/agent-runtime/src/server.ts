@@ -16,10 +16,13 @@ ideBridge()
 
 const { app } = createAgentRuntimeApp();
 const port = Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 8081;
+// Loopback unless the operator opens it for the edge (the Browser Bridge WebSocket, MET-921);
+// the runtime has no auth of its own, so a non-loopback bind relies on the host firewall.
+const hostname = process.env.LOCAL_STUDIO_AGENT_RUNTIME_HOST?.trim() || "127.0.0.1";
 
-const server = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
+const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(
-    `[agent-runtime] listening on http://127.0.0.1:${info.port} (pid ${process.pid}, node ${process.version})`,
+    `[agent-runtime] listening on http://${hostname}:${info.port} (pid ${process.pid}, node ${process.version})`,
   );
 });
 

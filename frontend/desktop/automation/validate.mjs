@@ -592,6 +592,7 @@ export function controllerStandards() {
 export function auditLayout() {
   const expected = [
     "frontend/desktop/project.mjs",
+    "scripts/deploy-spark.sh",
     "scripts/dev-watch.sh",
     "scripts/install-controller.sh",
     "scripts/install-desktop-app.sh",
@@ -618,5 +619,5 @@ export function auditLayout() {
       `Automation layout drifted: scripts=${actual.join(",")}; executable=${executable.join(",")}; stale=${stale.join(",")}`,
     );
   }
-  console.log("Automation layout passed: exactly four scripts");
+  console.log("Automation layout passed: exactly five scripts");
 }
