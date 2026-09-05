@@ -361,9 +361,15 @@ const groupOwnership = (
         member.sessionId !== reference.sessionId,
     )
   ) return "unknown";
+  // A member carrying a foreign marker is not ours. A member with no readable marker
+  // is still accepted: engines that rename workers with setproctitle (SGLang's
+  // scheduler and detokenizer) wipe /proc/<pid>/environ, and the parent-chain walk
+  // below still proves every member descends from the verified root.
   if (
     runtime.platform !== "win32" &&
-    verifiedMembers.some((member) => member.launchMarker !== record.nonce)
+    verifiedMembers.some(
+      (member) => member.launchMarker !== null && member.launchMarker !== record.nonce,
+    )
   ) {
     return "unknown";
   }
