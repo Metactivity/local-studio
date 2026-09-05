@@ -166,7 +166,7 @@ export const recipeToLaunchInput = (
   // llama.cpp is the one engine that runs natively: a binary/system runtime names
   // the executable (or a bare name on PATH); every other engine runs in a container.
   const native =
-    recipe.backend === "llamacpp" &&
+    (recipe.backend === "llamacpp" || recipe.backend === "sglang") &&
     (recipe.runtime.kind === "binary" || recipe.runtime.kind === "system");
   return {
     name: LLM_INSTANCE,

@@ -36,9 +36,8 @@ const supports = (host: HostProfile): EngineSupport => {
   if (host.accelerator !== "cuda") {
     return unsupported(`SGLang needs a CUDA device; this host reports ${host.accelerator}`);
   }
-  return host.dockerGpu
-    ? supported("docker")
-    : unsupported("SGLang needs Docker with GPU passthrough (nvidia-container-toolkit)");
+  // Native (process) runtime: the recipe names the venv's sglang CLI as its binary, like llama.cpp.
+  return host.dockerGpu ? supported("process", "docker") : supported("process");
 };
 
 export const sglang: ComputeEngineSpec = {
