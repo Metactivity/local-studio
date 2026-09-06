@@ -92,6 +92,8 @@ export interface LaunchPlan {
   /** process: [binary, ...args]. docker: the container's entrypoint args. */
   readonly argv: readonly string[];
   readonly image?: string;
+  /** docker only: raw `docker run` flags inserted before the image (extra mounts, caps, cgroup limits). */
+  readonly dockerArgs?: readonly string[];
   readonly env: Readonly<Record<string, string>>;
   readonly ports: readonly PortBinding[];
   readonly mounts: readonly Mount[];
@@ -135,6 +137,7 @@ export interface LaunchRequest {
   readonly extraArgs: readonly string[];
   readonly env: Readonly<Record<string, string>>;
   readonly dockerImage: string | null;
+  readonly dockerArgs?: readonly string[];
   /** Resolved executable for process launches; null for docker. */
   readonly binary: string | null;
 }

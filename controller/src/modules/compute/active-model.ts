@@ -96,6 +96,13 @@ export const serializeRecipeExtraArguments = (recipe: Recipe): string[] => {
   return argv;
 };
 
+/** extra_args.docker_args: raw `docker run` flags (extra mounts, caps, cgroup limits) for launches the
+ * launcher's fixed flags cannot express, e.g. a vLLM image that needs patched modules bind-mounted. */
+const recipeDockerArguments = (recipe: Recipe): string[] => {
+  const raw = getExtraArgument(recipe.extra_args, "docker-args");
+  return typeof raw === "string" && raw.trim() ? splitLaunchCommand(raw) : [];
+};
+
 /* ── custom launch command (opt-in arbitrary argv, unchanged policy) ───────── */
 
 const splitLaunchCommand = (command: string): string[] => {
@@ -194,6 +201,7 @@ export const recipeToLaunchInput = (
     extraArgs: serializeRecipeExtraArguments(recipe),
     env: recipe.env_vars ?? {},
     dockerImage,
+    dockerArgs: recipeDockerArguments(recipe),
     binary: native ? recipe.runtime.ref : null,
     ...(override ? { commandOverride: override } : {}),
   };

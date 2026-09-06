@@ -378,6 +378,7 @@ export const makeDockerLauncher = (
           `${mount.from}:${mount.to}${mount.readOnly ? ":ro" : ""}`,
         ]),
         ...Object.entries(plan.env).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
+        ...(plan.dockerArgs ?? []),
         plan.image,
         ...plan.argv,
       ];

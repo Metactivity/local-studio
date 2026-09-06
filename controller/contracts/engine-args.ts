@@ -249,6 +249,7 @@ export const INTERNAL_RECIPE_KEYS: ReadonlySet<string> = new Set([
   "custom-command",
   "docker-container",
   "docker-image",
+  "docker-args",
 ]);
 
 export const isInternalRecipeKey = (key: string): boolean =>

@@ -190,6 +190,7 @@ export const plan = (
         : [...parts.args],
     // An engine may always offer an image; only a container plan carries one.
     ...(request.runtime === "docker" && image ? { image } : {}),
+    ...(request.runtime === "docker" && request.dockerArgs?.length ? { dockerArgs: request.dockerArgs } : {}),
     env: { ...request.env, ...(parts.env ?? {}) },
     ports: [{ container: parts.listenPort, host: request.port }],
     mounts: modelMounts(request),

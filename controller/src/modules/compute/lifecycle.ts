@@ -59,6 +59,7 @@ export interface ComputeLaunchInput {
   readonly extraArgs: readonly string[];
   readonly env: Readonly<Record<string, string>>;
   readonly dockerImage: string | null;
+  readonly dockerArgs?: readonly string[];
   /** Executable for process launches; null = the engine's default binary. */
   readonly binary: string | null;
 }
@@ -238,6 +239,7 @@ export const makeComputeService = (deps: ComputeDeps): ComputeService => {
               devices: record.devices,
               health: spec.health,
               ...(input.dockerImage ? { image: input.dockerImage } : {}),
+              ...(input.dockerArgs?.length ? { dockerArgs: input.dockerArgs } : {}),
             },
             host.accelerator,
           )
@@ -253,6 +255,7 @@ export const makeComputeService = (deps: ComputeDeps): ComputeService => {
             extraArgs: input.extraArgs,
             env: input.env,
             dockerImage: input.dockerImage,
+            ...(input.dockerArgs ? { dockerArgs: input.dockerArgs } : {}),
             binary: input.binary ?? spec.defaultBinary ?? null,
           });
 
