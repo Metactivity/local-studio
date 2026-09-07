@@ -89,3 +89,6 @@ frontend/dist-installers/
 .vercel
 .env*
 .local-studio-dev.pid
+
+# deploy-spark.sh stamp
+.version
